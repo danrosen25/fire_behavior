@@ -46,20 +46,25 @@
 
       if (DEBUG_LOCAL) call Print_message ('  Entering subroutine Init_state')
 
-        ! Fire state initialization
-      if (DEBUG_LOCAL) call Print_message ('  Reading geogrid file')
-      geogrid = geogrid_t (file_name = 'geo_em.d01.nc')
+      if (DEBUG_LOCAL) call Print_message ('  Initialization...')
+      if (config_flags%ideal_opt == 0) then
+          ! Real world
+        if (DEBUG_LOCAL) call Print_message ('    Reading geogrid file')
+        geogrid = geogrid_t (file_name = 'geo_em.d01.nc')
 
-      if (DEBUG_LOCAL) call Print_message ('  Initializing state')
-      call grid%Initialization (config_flags, geogrid)
+        if (DEBUG_LOCAL) call Print_message ('    Initializing fire state')
+        call grid%Initialization (config_flags, geogrid)
 
-        ! Atmosphere to Fire
-      if (present (wrf)) then
-        if (DEBUG_LOCAL) call Print_message ('  Initializing atmospheric state')
-        call grid%Handle_wrfdata_update (wrf, config_flags)
+        if (present (wrf)) then
+          if (DEBUG_LOCAL) call Print_message ('    Initializing atmospheric state')
+          call grid%Handle_wrfdata_update (wrf, config_flags)
+        end if
+      else
+          ! Ideal
+        if (DEBUG_LOCAL) call Print_message ('    Initializing fire state')
+        call grid%Initialization (config_flags)
       end if
 
-        ! Fire init
       call Init_fire_components (grid, config_flags)
 
       if (DEBUG_LOCAL) then

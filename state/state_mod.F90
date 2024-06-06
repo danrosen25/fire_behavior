@@ -180,17 +180,50 @@
 
       class (state_fire_t), intent(in out) :: this
       type (namelist_t), intent (in) :: config_flags
-      type (geogrid_t), intent (in) :: geogrid
+      type (geogrid_t), intent (in), optional :: geogrid
 
       logical, parameter :: DEBUG_LOCAL = .false.
-      integer :: ids0, ide0, jds0, jde0
+      integer :: ids0, ide0, jds0, jde0, i, j
+      type (proj_lc_t) :: proj
+      logical :: is_ideal_sim
 
+
+      if (present (geogrid)) then
+        is_ideal_sim = .false.
+      else
+        is_ideal_sim = .true.
+      end if
 
         ! Domain dimensions
-      ids0 = geogrid%ifds
-      ide0 = geogrid%ifde
-      jds0 = geogrid%jfds
-      jde0 = geogrid%jfde
+      Ideal_sim1: if (is_ideal_sim) then
+        ids0 = 1
+        ide0 = config_flags%nx
+        jds0 = 1
+        jde0 = config_flags%ny
+
+        this%dx = config_flags%dx
+        this%dy = config_flags%dy
+
+        this%cen_lat = config_flags%cen_lat
+        this%cen_lon = config_flags%cen_lon
+
+        proj = proj_lc_t (cen_lat = this%cen_lat , cen_lon = this%cen_lon, dx = this%dx, dy = this%dy, &
+            standard_lon = config_flags%stand_lon, true_lat_1 = config_flags%true_lat_1, &
+            true_lat_2 = config_flags%true_lat_2, nx = config_flags%nx, ny = config_flags%ny)
+      else
+        ids0 = geogrid%ifds
+        ide0 = geogrid%ifde
+        jds0 = geogrid%jfds
+        jde0 = geogrid%jfde
+
+        this%dx = geogrid%dx / geogrid%sr_x
+        this%dy = geogrid%dy / geogrid%sr_y
+
+        this%cen_lat = geogrid%cen_lat
+        this%cen_lon = geogrid%cen_lon
+
+        proj = geogrid%Get_atm_proj ()
+      end if Ideal_sim1
 
       this%ifds = ids0
       this%ifde = ide0
@@ -227,11 +260,6 @@
 
       this%datetime_next_atm_update = this%datetime_start
 
-      this%cen_lat = geogrid%cen_lat
-      this%cen_lon = geogrid%cen_lon
-
-      this%dx = geogrid%dx / geogrid%sr_x
-      this%dy = geogrid%dy / geogrid%sr_y
 
       if (DEBUG_LOCAL) call this%Print()
 
@@ -240,8 +268,6 @@
 
       allocate (this%uf(this%ifms:this%ifme, this%jfms:this%jfme))
       allocate (this%vf(this%ifms:this%ifme, this%jfms:this%jfme))
-      this%uf = 0.
-      this%vf = 0.
       allocate (this%fmc_g(this%ifms:this%ifme, this%jfms:this%jfme))
       this%fmc_g = config_flags%fuelmc_g
 
@@ -301,12 +327,35 @@
       allocate (this%emis_smoke(this%ifms:this%ifme, this%jfms:this%jfme))
       this%emis_smoke = 0.0
 
-      this%zsf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%elevations
-      this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dxs
-      this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dys
-      this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%fuel_cats
+      Ideal_sim2: if (is_ideal_sim) then
+        do j = this%jfds, this%jfde
+          do i = this%ifds, this%ifde
+            this%zsf(i, j) = config_flags%elevation + &
+                             (i - this%ifds) * config_flags%dz_dx * config_flags%dx + &
+                             (j - this%jfds) * config_flags%dz_dy * config_flags%dy
+          end do
+        end do
+        this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dx
+        this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dy
+        this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%fuel_cat
 
-      if (config_flags%fire_is_real_perim) then
+        this%uf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%zonal_wind
+        this%vf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%meridional_wind
+
+        call this%Init_latlons (proj)
+      else
+        this%zsf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%elevations
+        this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dxs
+        this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dys
+        this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%fuel_cats
+
+        this%uf = 0.0
+        this%vf = 0.0
+
+        call this%Init_latlons (proj, srx = geogrid%sr_x, sry = geogrid%sr_y)
+      end if Ideal_sim2
+
+      if (config_flags%fire_is_real_perim .and. .not. is_ideal_sim) then
         if (allocated (geogrid%lfn_init)) then
           this%lfn_hist(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%lfn_init
         else
@@ -316,7 +365,6 @@
 
       this%unit_fxlat = 2.0 * PI / (360.0 * RERADIUS)  ! earth circumference in m / 360 degrees
       this%unit_fxlong = cos (this%cen_lat * 2.0 * PI / 360.0) * this%unit_fxlat  ! latitude
-      call this%Init_latlons (geogrid)
 
       call this%Init_tiles (config_flags)
 
@@ -371,33 +419,46 @@
 
     end subroutine Init_ignition_lines
 
-    subroutine Init_latlons (this, geogrid)
+    subroutine Init_latlons (this, proj, srx, sry)
 
       implicit none
 
       class (state_fire_t), intent (in out) :: this
-      type (geogrid_t), intent(in) :: geogrid
+!      type (geogrid_t), intent(in) :: geogrid
+      type (proj_lc_t), intent(in) :: proj
+      integer, optional :: srx, sry
 
       real, parameter :: OFFSET = 0.5
-      type (proj_lc_t) :: proj
-      integer :: i, j
+      integer :: i, j, sr_x, sr_y
       real :: i_atm, j_atm, offset_corners_x, offset_corners_y
 
+
+      if (present (srx) .and. present (sry)) then
+        sr_x = srx
+        sr_y = sry
+      else
+        sr_x = 1
+        sr_y = 1
+      end if
 
       allocate (this%lons(this%ifms:this%ifme, this%jfms:this%jfme))
       allocate (this%lats(this%ifms:this%ifme, this%jfms:this%jfme))
       allocate (this%lons_c(this%nx + 1, this%ny + 1))
       allocate (this%lats_c(this%nx + 1, this%ny + 1))
 
-      proj = geogrid%Get_atm_proj ()
+!      proj = geogrid%Get_atm_proj ()
 
-      offset_corners_x = (1.0 / real (geogrid%sr_x)) / 2.0
-      offset_corners_y = (1.0 / real (geogrid%sr_y)) / 2.0
+!      offset_corners_x = (1.0 / real (geogrid%sr_x)) / 2.0
+!      offset_corners_y = (1.0 / real (geogrid%sr_y)) / 2.0
+      offset_corners_x = (1.0 / real (sr_x)) / 2.0
+      offset_corners_y = (1.0 / real (sr_y)) / 2.0
 
       do j = 1, this%ny
         do i = 1, this%nx
-          i_atm = (i - OFFSET) / geogrid%sr_x + OFFSET
-          j_atm = (j - OFFSET) / geogrid%sr_y + OFFSET
+!          i_atm = (i - OFFSET) / geogrid%sr_x + OFFSET
+!          j_atm = (j - OFFSET) / geogrid%sr_y + OFFSET
+          i_atm = (i - OFFSET) / sr_x + OFFSET
+          j_atm = (j - OFFSET) / sr_y + OFFSET
           call proj%Calc_latlon (i = i_atm, j = j_atm, lat = this%lats(i, j), lon = this%lons(i, j))
           call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm - offset_corners_y, &
               lat = this%lats_c(i, j), lon = this%lons_c(i, j))
@@ -405,21 +466,27 @@
       end do
 
       do j = 1, this%ny
-        i_atm = (this%nx - OFFSET) / geogrid%sr_x + OFFSET
-        j_atm = (j - OFFSET) / geogrid%sr_y + OFFSET
+!        i_atm = (this%nx - OFFSET) / geogrid%sr_x + OFFSET
+!        j_atm = (j - OFFSET) / geogrid%sr_y + OFFSET
+        i_atm = (this%nx - OFFSET) / sr_x + OFFSET
+        j_atm = (j - OFFSET) / sr_y + OFFSET
         call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm - offset_corners_y, &
             lat = this%lats_c(this%nx + 1, j), lon = this%lons_c(this%nx + 1, j))
       end do
 
       do i = 1, this%nx
-        i_atm = (i - OFFSET) / geogrid%sr_x + OFFSET
-        j_atm = (this%ny - OFFSET) / geogrid%sr_y + OFFSET
+!        i_atm = (i - OFFSET) / geogrid%sr_x + OFFSET
+!        j_atm = (this%ny - OFFSET) / geogrid%sr_y + OFFSET
+        i_atm = (i - OFFSET) / sr_x + OFFSET
+        j_atm = (this%ny - OFFSET) / sr_y + OFFSET
         call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm + offset_corners_y, &
             lat = this%lats_c(i, this%ny + 1), lon = this%lons_c(i, this%ny + 1))
       end do
 
-      i_atm = (this%nx - OFFSET) / geogrid%sr_x + OFFSET
-      j_atm = (this%ny - OFFSET) / geogrid%sr_y + OFFSET
+!      i_atm = (this%nx - OFFSET) / geogrid%sr_x + OFFSET
+!      j_atm = (this%ny - OFFSET) / geogrid%sr_y + OFFSET
+      i_atm = (this%nx - OFFSET) / sr_x + OFFSET
+      j_atm = (this%ny - OFFSET) / sr_y + OFFSET
       call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm + offset_corners_y, &
           lat = this%lats_c(this%nx + 1, this%ny + 1), lon = this%lons_c(this%nx + 1, this%ny + 1))
 
