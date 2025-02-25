@@ -5,7 +5,7 @@
     use namelist_mod, only : namelist_t
     use netcdf_mod, only : Get_netcdf_var, Get_netcdf_att, Get_netcdf_dim, Is_netcdf_file_present
     use proj_lc_mod, only : proj_lc_t
-    use stderrout_mod, only : Print_message
+    use stderrout_mod, only : Print_message, Stop_simulation
     use interp_mod, only : Interp_profile
 
     implicit none
@@ -739,8 +739,13 @@
             ids, ide, kds, kde, jds, jde,          &
             ims, ime, kms, kme, jms, jme,          &
             its, ite, kts, kte, jts, jte,          &
-            rho, dz8w,                             &
-            emis_smoke, smoke_tracer, tracer_opt)
+            emis_smoke, smoke_tracer, tracer_opt,  &
+            fgrnhfx, fgrnqfx,                      &
+            grnhfx, grnqfx, canhfx, canqfx,        &
+            alfg, alfc, z1can,                     &
+            rho, dz8w, z_at_w,                     &
+            mu, c1h, c2h,                          &
+            rthfrten, rqvfrten)
 
       use, intrinsic :: iso_fortran_env, only : OUTPUT_UNIT
       implicit none
@@ -756,18 +761,26 @@
 
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: emis_smoke
       real, dimension(ims:ime, kms:kme, jms:jme), intent (in out), optional :: smoke_tracer
-      real, dimension(ims:ime, kms:kme, jms:jme), intent (in) :: rho, dz8w
       integer, intent (in) :: tracer_opt
+      real, dimension(ifms:ifme, jfms:jfme), intent (in) :: fgrnhfx, fgrnqfx
+      real, dimension(ims:ime, kms:kme, jms:jme), intent (in) :: rho, dz8w, z_at_w
+      real, intent(in), dimension(ims:ime, jms:jme) :: mu   ! dry air mass (pa)
+      real, intent(in), dimension(kms:kme) :: c1h, c2h      ! hybrid coordinate weights
+      real, intent(in) :: alfg                              ! extinction depth surface fire heat (m)
+      real, intent(in) :: alfc                              ! extinction depth crown  fire heat (m)
+      real, intent(in) :: z1can                             ! height of crown fire heat release (m)
+      real, dimension(ims:ime, jms:jme), intent (out) :: grnhfx, grnqfx, canhfx, canqfx
+      real, intent(out), dimension(ims:ime, kms:kme, jms:jme) ::   &
+           rthfrten, & ! theta tendency from fire (in mass units)
+           rqvfrten    ! Qv tendency from fire (in mass units)
 
+      ! Local
       integer :: i, j, ibase, jbase, i_f, j_f, ioff, joff
       real :: avgw
       integer :: isz1, jsz1, isz2, jsz2, ir, jr
       integer :: ifts, ifte, jfts, jfte, ij
 
-      if (tracer_opt == 3) then
 
-        !$OMP PARALLEL DO   &
-        !$OMP PRIVATE ( ij ,i,j,k,its,ite,jts,jte)
         DO ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
@@ -782,6 +795,17 @@
           jr = jsz2 / jsz1
           avgw = 1.0 / (ir * jr)
 
+          write (OUTPUT_UNIT, *) 'masih: ifts, ifte, jfts, jfte', ifts, ifte, jfts, jfte 
+          write (OUTPUT_UNIT, *) 'masih: isz1, jsz1, isz2, jsz2', isz1, jsz1, isz2, jsz2
+          write (OUTPUT_UNIT, *) 'masih: ir, jz', ir, jr
+
+          do j=max(jds+1,jts),min(jte,jde-2)
+            do i=max(ids+1,its),min(ite,ide-2)
+              grnhfx(i,j) = 0.0
+              grnqfx(i,j) = 0.0
+            end do
+          end do
+
           do j=max(jds+1,jts),min(jte,jde-2)
             jbase = jfts + jr * (j - jts)
             do i=max(ids+1,its),min(ite,ide-2)
@@ -790,18 +814,176 @@
                 j_f = joff + jbase
                 do ioff=0,ir-1
                   i_f = ioff + ibase
-                  smoke_tracer(i,kts,j) = smoke_tracer(i,kts,j) + &
-                  (avgw * emis_smoke(i_f,j_f) * 1000/(rho(i,kts,j)*dz8w(i,kts,j)))
+                  if (tracer_opt == 3) then
+                    smoke_tracer(i,kts,j) = smoke_tracer(i,kts,j) + &
+                    (avgw * emis_smoke(i_f,j_f) * 1000.0/(rho(i,kts,j)*dz8w(i,kts,j)))
+                  end if
+                  grnhfx(i,j) = grnhfx(i,j) + fgrnhfx(i_f,j_f) * config_flags%fire_atm_feedback
+                  grnqfx(i,j) = grnqfx(i,j) + fgrnqfx(i_f,j_f) * config_flags%fire_atm_feedback
                 end do
               end do
             end do
           end do
         END DO
-        !$OMP END PARALLEL DO
 
-      end if
+        canqfx = 0.   ! currently no canopy model 
+        canhfx = 0.
+        
+!      call Fire_tendency (               &
+!            ids,ide,kds,kde,jds,jde,     & ! dimensions
+!            ims,ime,kms,kme,jms,jme,     &
+!            its,ite,kts,kte,jts,jte,     &
+!            grnhfx,grnqfx,canhfx,canqfx, & ! heat fluxes summed up to  atm grid
+!            alfg,alfc,z1can,             & ! coeffients, properties, geometry
+!            z_at_w,dz8w,mu,c1h,c2h,rho,  &
+!            rthfrten,rqvfrten)             ! theta and Qv tendencies
+
+        ! currently the no tendencies
+        rthfrten = 0.
+        rqvfrten = 0.
 
     end subroutine Provide_atm_feedback
+
+    subroutine Fire_tendency(   &
+        ids,ide, kds,kde, jds,jde,   & ! dimensions
+        ims,ime, kms,kme, jms,jme,   &
+        its,ite, kts,kte, jts,jte,   &
+        grnhfx,grnqfx,canhfx,canqfx, & ! heat fluxes summed up to  atm grid
+        alfg,alfc,z1can,             & ! coeffients, properties, geometry
+        z_at_w,dz8w,mu,c1h,c2h,rho,  &
+        rthfrten,rqvfrten)             ! theta and Qv tendencies
+
+    ! This routine is atmospheric physics
+
+    ! --- this routine takes fire generated heat and moisture fluxes and
+    !     calculates their influence on the theta and water vapor
+    ! --- note that these tendencies are valid at the Arakawa-A location
+
+      use, intrinsic :: iso_fortran_env, only : OUTPUT_UNIT
+      implicit none
+
+    ! --- incoming variables
+
+      integer, intent (in) :: ids, ide, kds, kde, jds, jde, &
+                              ims, ime, kms, kme, jms, jme, &
+                              its, ite, kts, kte, jts, jte
+
+      real, intent(in), dimension(ims:ime, jms:jme) :: grnhfx,grnqfx  ! w/m^2
+      real, intent(in), dimension(ims:ime, jms:jme) :: canhfx,canqfx  ! w/m^2
+      real, intent(in), dimension(ims:ime, jms:jme) :: mu             ! dry air mass (pa)
+      real, intent(in), dimension(kms:kme) :: c1h, c2h       ! hybrid coordinate weights
+
+      real, intent(in), dimension(ims:ime, kms:kme, jms:jme) :: z_at_w ! m abv sealvl
+      real, intent(in), dimension(ims:ime, kms:kme, jms:jme) :: dz8w   ! dz across w-lvl
+      real, intent(in), dimension(ims:ime, kms:kme, jms:jme) :: rho    ! density
+
+      real, intent(in) :: alfg     ! extinction depth surface fire heat (m)
+      real, intent(in) :: alfc     ! extinction depth crown  fire heat (m)
+      real, intent(in) :: z1can    ! height of crown fire heat release (m)
+
+    ! --- outgoing variables
+
+      real, intent(out), dimension(ims:ime, kms:kme, jms:jme) ::   &
+           rthfrten, & ! theta tendency from fire (in mass units)
+           rqvfrten    ! Qv tendency from fire (in mass units)
+    ! --- local variables
+
+      integer :: i,j,k
+      integer :: i_st,i_en, j_st,j_en, k_st,k_en
+
+      real :: cp_i
+      real :: rho_i
+      real :: xlv_i
+      real :: z_w
+      real :: fact_g, fact_c
+      real :: alfg_i, alfc_i
+
+      real, dimension( its:ite,kts:kte,jts:jte ) :: hfx,qfx
+
+
+      do j=jts,jte
+        do k=kts,min(kte+1,kde)
+          do i=its,ite
+            rthfrten(i,k,j)=0.
+            rqvfrten(i,k,j)=0.
+          enddo
+        enddo
+      enddo
+
+    ! --- set some local constants
+
+      cp_i = 1./cp     ! inverse of specific heat
+      xlv_i = 1./xlv   ! inverse of latent heat
+      alfg_i = 1./alfg
+      alfc_i = 1./alfc
+
+    ! --- set loop indicies : note that
+
+      i_st = MAX(its,ids+1)
+      i_en = MIN(ite,ide-1)
+      k_st = kts
+      k_en = MIN(kte,kde-1)
+      j_st = MAX(jts,jds+1)
+      j_en = MIN(jte,jde-1)
+    ! --- distribute fluxes
+
+      do j = j_st,j_en
+        do k = k_st,k_en
+          do i = i_st,i_en
+
+            ! --- set z (in meters above ground)
+
+            z_w = z_at_w(i,k,j) - z_at_w(i, 1, j)
+
+            ! --- heat flux
+
+            fact_g = cp_i * EXP( - alfg_i * z_w )
+            if ( z_w < z1can ) then
+                   fact_c = cp_i
+            else
+                   fact_c = cp_i * EXP( - alfc_i * (z_w - z1can) )
+            end if
+            hfx(i,k,j) = fact_g * grnhfx(i,j) + fact_c * canhfx(i,j)
+
+            ! --- vapor flux
+
+            fact_g = xlv_i * EXP( - alfg_i * z_w )
+            if (z_w < z1can) then
+                   fact_c = xlv_i
+            else
+                   fact_c = xlv_i * EXP( - alfc_i * (z_w - z1can) )
+            end if
+            qfx(i,k,j) = fact_g * grnqfx(i,j) + fact_c * canqfx(i,j)
+
+            if ((grnhfx(i,j) >0.) .and. (k == 1)) then
+              write (OUTPUT_UNIT, *) 'masih: grnhfx, grnqfx', grnhfx(i,j), grnqfx(i,j)
+              write (OUTPUT_UNIT, *) 'masih: hfx, qfx', hfx(i,1,j), qfx(i,1,j), hfx(i,1,j), qfx(i,1,j)
+            end if
+
+          end do
+        end do
+      end do
+    ! --- add flux divergence to tendencies
+    !
+    !   multiply by dry air mass (mu) to eliminate the need to
+    !   call sr. calculate_phy_tend (in dyn_em/module_em.F)
+
+      do j = j_st,j_en
+        do k = k_st,k_en-1
+          do i = i_st,i_en
+
+            rho_i = 1./rho(i,k,j)
+
+            rthfrten(i,k,j) = - (c1h(k)*mu(i,j)+c2h(k)) * rho_i * (hfx(i,k+1,j)-hfx(i,k,j)) / dz8w(i,k,j)
+            rqvfrten(i,k,j) = - (c1h(k)*mu(i,j)+c2h(k)) * rho_i * (qfx(i,k+1,j)-qfx(i,k,j)) / dz8w(i,k,j)
+
+          end do
+        end do
+      end do
+
+      return
+
+    end subroutine Fire_tendency
 
     subroutine Update_atm_state (this, datetime_now)
 
