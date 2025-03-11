@@ -830,18 +830,15 @@
           end do
       end do Loop_tiles
 
-!      call Fire_tendency (               &
-!            ids,ide,kds,kde,jds,jde,     & ! dimensions
-!            ims,ime,kms,kme,jms,jme,     &
-!            its,ite,kts,kte,jts,jte,     &
-!            grnhfx,grnqfx,canhfx,canqfx, & ! heat fluxes summed up to  atm grid
-!            alfg,alfc,z1can,             & ! coeffients, properties, geometry
-!            z_at_w,dz8w,mu,c1h,c2h,rho,  &
-!            rthfrten,rqvfrten)             ! theta and Qv tendencies
-
-        ! currently the no tendencies
-        rthfrten = 0.
-        rqvfrten = 0.
+      call Fire_tendency (               &
+            ids,ide - 1,kds,kde,jds,jde - 1,     & ! dimensions
+            ims,ime,kms,kme,jms,jme,     &
+            its,min (ite, ide-1),kts,kte,jts,min (jte, jde - 1),     &
+            grnhfx,grnqfx,canhfx,canqfx, & ! heat fluxes summed up to  atm grid
+            alfg,alfc,z1can,             & ! coeffients, properties, geometry
+            z_at_w,dz8w,mu,c1h,c2h,rho,  &
+            config_flags%fire_atm_feedback, &
+            rthfrten,rqvfrten)             ! theta and Qv tendencies
 
     end subroutine Provide_atm_feedback
 
@@ -852,6 +849,7 @@
         grnhfx,grnqfx,canhfx,canqfx, & ! heat fluxes summed up to  atm grid
         alfg,alfc,z1can,             & ! coeffients, properties, geometry
         z_at_w,dz8w,mu,c1h,c2h,rho,  &
+        fire_atm_feedback,           &
         rthfrten,rqvfrten)             ! theta and Qv tendencies
 
     ! This routine is atmospheric physics
@@ -882,6 +880,8 @@
       real, intent(in) :: alfc     ! extinction depth crown  fire heat (m)
       real, intent(in) :: z1can    ! height of crown fire heat release (m)
 
+      real, intent(in) :: fire_atm_feedback
+
     ! --- outgoing variables
 
       real, intent(out), dimension(ims:ime, kms:kme, jms:jme) ::   &
@@ -902,6 +902,10 @@
       real, dimension( its:ite,kts:kte,jts:jte ) :: hfx,qfx
 
 
+      write (OUTPUT_UNIT, *) 'pajm: its, ite, jts, jte, kts, kte = ', its, ite, jts, jte, kts, kte
+      write (OUTPUT_UNIT, *) 'pajm: ids, ide, jds, jde, kds, kde = ', ids, ide, jds, jde, kds, kde
+      write (OUTPUT_UNIT, *) 'pajm: alfg,alfc,z1can = ', alfg,alfc,z1can
+
       do j=jts,jte
         do k=kts,min(kte+1,kde)
           do i=its,ite
@@ -910,6 +914,8 @@
           enddo
         enddo
       enddo
+
+      if (fire_atm_feedback <= 0.0) return
 
     ! --- set some local constants
 
@@ -944,7 +950,7 @@
             else
                    fact_c = cp_i * EXP( - alfc_i * (z_w - z1can) )
             end if
-            hfx(i,k,j) = fact_g * grnhfx(i,j) + fact_c * canhfx(i,j)
+            hfx(i,k,j) = fact_g * grnhfx(i,j) * fire_atm_feedback+ fact_c * canhfx(i,j)
 
             ! --- vapor flux
 
@@ -954,12 +960,12 @@
             else
                    fact_c = xlv_i * EXP( - alfc_i * (z_w - z1can) )
             end if
-            qfx(i,k,j) = fact_g * grnqfx(i,j) + fact_c * canqfx(i,j)
+            qfx(i,k,j) = fact_g * grnqfx(i,j) * fire_atm_feedback + fact_c * canqfx(i,j)
 
-            if ((grnhfx(i,j) >0.) .and. (k == 1)) then
-              write (OUTPUT_UNIT, *) 'masih: grnhfx, grnqfx', grnhfx(i,j), grnqfx(i,j)
-              write (OUTPUT_UNIT, *) 'masih: hfx, qfx', hfx(i,1,j), qfx(i,1,j), hfx(i,1,j), qfx(i,1,j)
-            end if
+!            if ((grnhfx(i,j) * fire_atm_feedback >0.) .and. (k == 1)) then
+!              write (OUTPUT_UNIT, *) 'masih: grnhfx, grnqfx', grnhfx(i,j), grnqfx(i,j)
+!              write (OUTPUT_UNIT, *) 'masih: hfx, qfx', hfx(i,1,j), qfx(i,1,j), hfx(i,1,j), qfx(i,1,j)
+!            end if
 
           end do
         end do
