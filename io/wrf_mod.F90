@@ -742,6 +742,7 @@
             emis_smoke, smoke_tracer, tracer_opt,  &
             fgrnhfx, fgrnqfx,                      &
             grnhfx, grnqfx, canhfx, canqfx,        &
+            grnsmk,                                &
             alfg, alfc, z1can,                     &
             rho, dz8w, z_at_w,                     &
             mu, c1h, c2h,                          &
@@ -769,19 +770,19 @@
       real, intent(in) :: alfg                              ! extinction depth surface fire heat (m)
       real, intent(in) :: alfc                              ! extinction depth crown  fire heat (m)
       real, intent(in) :: z1can                             ! height of crown fire heat release (m)
-      real, dimension(ims:ime, jms:jme), intent (out) :: grnhfx, grnqfx, canhfx, canqfx
+      real, dimension(ims:ime, jms:jme), intent (out) :: grnhfx, grnqfx, canhfx, canqfx, grnsmk
       real, intent(out), dimension(ims:ime, kms:kme, jms:jme) ::   &
            rthfrten, & ! theta tendency from fire (in mass units)
            rqvfrten    ! Qv tendency from fire (in mass units)
 
       ! Local
       integer :: i, j, ibase, jbase, i_f, j_f, ioff, joff
-      real :: avgw
+      real :: avgw, convert_kg_m2_to_g_kg
       integer :: isz1, jsz1, isz2, jsz2, ir, jr
       integer :: ifts, ifte, jfts, jfte, ij
 
 
-        DO ij = 1, num_tiles
+      Loop_tiles: do ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
           jfts = j_start(ij)
@@ -795,40 +796,40 @@
           jr = jsz2 / jsz1
           avgw = 1.0 / (ir * jr)
 
+          write (OUTPUT_UNIT, *) 'masih: its, ite, jts, jte', its, ite, jts, jte
           write (OUTPUT_UNIT, *) 'masih: ifts, ifte, jfts, jfte', ifts, ifte, jfts, jfte 
           write (OUTPUT_UNIT, *) 'masih: isz1, jsz1, isz2, jsz2', isz1, jsz1, isz2, jsz2
           write (OUTPUT_UNIT, *) 'masih: ir, jz', ir, jr
 
-          do j=max(jds+1,jts),min(jte,jde-2)
-            do i=max(ids+1,its),min(ite,ide-2)
-              grnhfx(i,j) = 0.0
-              grnqfx(i,j) = 0.0
-            end do
-          end do
-
-          do j=max(jds+1,jts),min(jte,jde-2)
+          do j = max (jds + 1, jts), min (jte, jde - 2)
             jbase = jfts + jr * (j - jts)
-            do i=max(ids+1,its),min(ite,ide-2)
+!            write (OUTPUT_UNIT, *) 'masih: j, jbase', j, jbase
+            do i = max (ids + 1, its), min (ite, ide - 2)
               ibase = ifts + ir * (i - its)
-              do joff=0,jr-1
+!              write (OUTPUT_UNIT, *) 'masih: i, ibase', i, ibase
+              canqfx(i, j) = 0.0
+              canhfx(i, j) = 0.0
+              grnsmk(i, j) = 0.0
+              grnhfx(i, j) = 0.0
+              grnqfx(i, j) = 0.0
+              convert_kg_m2_to_g_kg = 1000.0 / (rho(i, kts, j) * dz8w(i, kts, j))
+              do joff = 0, jr - 1
                 j_f = joff + jbase
-                do ioff=0,ir-1
+                do ioff = 0, ir - 1
                   i_f = ioff + ibase
-                  if (tracer_opt == 3) then
-                    smoke_tracer(i,kts,j) = smoke_tracer(i,kts,j) + &
-                    (avgw * emis_smoke(i_f,j_f) * 1000.0/(rho(i,kts,j)*dz8w(i,kts,j)))
-                  end if
-                  grnhfx(i,j) = grnhfx(i,j) + fgrnhfx(i_f,j_f) * config_flags%fire_atm_feedback
-                  grnqfx(i,j) = grnqfx(i,j) + fgrnqfx(i_f,j_f) * config_flags%fire_atm_feedback
+                  grnsmk(i, j) = grnsmk(i, j) + emis_smoke(i_f, j_f)
+                  grnhfx(i, j) = grnhfx(i, j) + fgrnhfx(i_f, j_f) ! * config_flags%fire_atm_feedback
+                  grnqfx(i, j) = grnqfx(i, j) + fgrnqfx(i_f, j_f) ! * config_flags%fire_atm_feedback
                 end do
               end do
+              grnhfx(i, j) = grnhfx(i, j) * avgw
+              grnqfx(i, j) = grnqfx(i, j) * avgw
+              grnsmk(i, j) = grnsmk(i, j) * convert_kg_m2_to_g_kg * avgw
+              if (tracer_opt == 3) smoke_tracer(i, kts, j) = smoke_tracer(i, kts, j) + grnsmk(i, j)
             end do
           end do
-        END DO
+      end do Loop_tiles
 
-        canqfx = 0.   ! currently no canopy model 
-        canhfx = 0.
-        
 !      call Fire_tendency (               &
 !            ids,ide,kds,kde,jds,jde,     & ! dimensions
 !            ims,ime,kms,kme,jms,jme,     &
