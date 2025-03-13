@@ -65,7 +65,7 @@
       real, intent(in) :: p, t, qv
       real :: rh
 
-      real, parameter :: PQ0 = 379.90516, A2 = 17.2693882, A3= 273.16, A4 = 35.86, RHMIN = 1.0
+      real, parameter :: PQ0 = 379.90516, A2 = 17.2693882, A3= 273.16, A4 = 35.86, RHMIN = 1.0, RHMAX = 100.0
       real :: q, qs
       integer :: i, j, k
 
@@ -73,12 +73,7 @@
       q = qv / (1.0 + qv)
       qs = PQ0 / p * exp (A2 * (t - A3) / (t - A4))
       rh = 100.0 * q / qs
-
-      if (rh > 100.0) then
-        rh = 100.0
-      else if (rh .lt. RHMIN) then
-        rh = rhmin
-      end if
+      rh = max (min (rh, RHMAX), RHMIN)
 
     end function Calc_rh
 
