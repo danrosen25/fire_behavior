@@ -796,12 +796,12 @@
 
     subroutine Provide_atm_feedback (config_flags, &
             ifms, ifme, jfms, jfme,                &
-            i_start, i_end, j_start, j_end,        &
-            num_tiles,                             &
+            ifts, ifte, jfts, jfte,                &
             ifps, ifpe, jfps, jfpe,                &
             ids, ide, kds, kde, jds, jde,          &
             ims, ime, kms, kme, jms, jme,          &
             its, ite, kts, kte, jts, jte,          &
+            sr_x, sr_y,                            &
             emis_smoke, smoke_tracer, tracer_opt,  &
             p_phy, t_phy, qv,                      &
             aod5502d_smoke,                        &
@@ -813,7 +813,6 @@
             mu, c1h, c2h,                          &
             rthfrten, rqvfrten)
 
-      use, intrinsic :: iso_fortran_env, only : OUTPUT_UNIT
       implicit none
 
       type (namelist_t), intent (in) :: config_flags
@@ -821,9 +820,8 @@
                               ifps, ifpe, jfps, jfpe,       &
                               ids, ide, kds, kde, jds, jde, &
                               ims, ime, kms, kme, jms, jme, &
-                              its, ite, kts, kte, jts, jte, num_tiles
-
-      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+                              its, ite, kts, kte, jts, jte, &
+                              ifts, ifte, jfts, jfte, sr_x, sr_y
 
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: emis_smoke
       real, dimension(ims:ime, kms:kme, jms:jme), intent (in out), optional :: smoke_tracer
@@ -840,47 +838,27 @@
            rthfrten, & ! theta tendency from fire (in mass units)
            rqvfrten    ! Qv tendency from fire (in mass units)
 
-      ! Local
+      logical, parameter :: DEBUG_LOCAL = .true.
       integer :: i, j, ibase, jbase, i_f, j_f, ioff, joff
       real :: avgw, convert_kg_m2_to_g_kg
-      integer :: isz1, jsz1, isz2, jsz2, ir, jr
-      integer :: ifts, ifte, jfts, jfte, ij
 
 
-      Loop_tiles: do ij = 1, num_tiles
-          ifts = i_start(ij)
-          ifte = i_end(ij)
-          jfts = j_start(ij)
-          jfte = j_end(ij)
+      if (DEBUG_LOCAL) call Check_dims (its, ite, jts, jte, ifts, ifte, jfts, jfte, sr_x, sr_y)
 
-          isz1 = ite - its + 1
-          jsz1 = jte - jts + 1
-          isz2 = ifte - ifts + 1
-          jsz2 = jfte - jfts + 1
-          ir = isz2 / isz1
-          jr = jsz2 / jsz1
-          avgw = 1.0 / (ir * jr)
-
-          write (OUTPUT_UNIT, *) 'masih: its, ite, jts, jte', its, ite, jts, jte
-          write (OUTPUT_UNIT, *) 'masih: ifts, ifte, jfts, jfte', ifts, ifte, jfts, jfte 
-          write (OUTPUT_UNIT, *) 'masih: isz1, jsz1, isz2, jsz2', isz1, jsz1, isz2, jsz2
-          write (OUTPUT_UNIT, *) 'masih: ir, jz', ir, jr
-
+      avgw = 1.0 / (sr_x * sr_y)
           do j = max (jds + 1, jts), min (jte, jde - 2)
-            jbase = jfts + jr * (j - jts)
-!            write (OUTPUT_UNIT, *) 'masih: j, jbase', j, jbase
+            jbase = jfts + sr_y * (j - jts)
             do i = max (ids + 1, its), min (ite, ide - 2)
-              ibase = ifts + ir * (i - its)
-!              write (OUTPUT_UNIT, *) 'masih: i, ibase', i, ibase
+              ibase = ifts + sr_x * (i - its)
               canqfx(i, j) = 0.0
               canhfx(i, j) = 0.0
               grnsmk(i, j) = 0.0
               grnhfx(i, j) = 0.0
               grnqfx(i, j) = 0.0
               convert_kg_m2_to_g_kg = 1000.0 / (rho(i, kts, j) * dz8w(i, kts, j))
-              do joff = 0, jr - 1
+              do joff = 0, sr_y - 1
                 j_f = joff + jbase
-                do ioff = 0, ir - 1
+                do ioff = 0, sr_x - 1
                   i_f = ioff + ibase
                   grnsmk(i, j) = grnsmk(i, j) + emis_smoke(i_f, j_f)
                   grnhfx(i, j) = grnhfx(i, j) + fgrnhfx(i_f, j_f) ! * config_flags%fire_atm_feedback
@@ -893,7 +871,6 @@
               if (tracer_opt == 3) smoke_tracer(i, kts, j) = smoke_tracer(i, kts, j) + grnsmk(i, j)
             end do
           end do
-      end do Loop_tiles
 
       call Fire_tendency (               &
             ids,ide - 1,kds,kde,jds,jde - 1,     & ! dimensions
@@ -909,6 +886,35 @@
            ids, ide, kds, kde, jds, jde,          &
            ims, ime, kms, kme, jms, jme,          &
            its, ite, kts, kte, jts, jte)
+
+    contains
+
+      subroutine Check_dims (its, ite, jts, jte, ifts, ifte, jfts, jfte, sr_x, sr_y)
+
+        use, intrinsic :: iso_fortran_env, only : OUTPUT_UNIT
+
+        implicit none
+
+        integer, intent (in) :: its, ite, jts, jte, ifts, ifte, jfts, jfte, sr_x, sr_y
+
+        integer :: isz1, jsz1, isz2, jsz2, ir, jr
+
+
+        isz1 = ite - its + 1
+        jsz1 = jte - jts + 1
+        isz2 = ifte - ifts + 1
+        jsz2 = jfte - jfts + 1
+        ir = isz2 / isz1
+        jr = jsz2 / jsz1
+
+        write (OUTPUT_UNIT, *) 'its, ite, jts, jte =', its, ite, jts, jte
+        write (OUTPUT_UNIT, *) 'ifts, ifte, jfts, jfte =', ifts, ifte, jfts, jfte 
+        write (OUTPUT_UNIT, *) 'isz1, jsz1, isz2, jsz2 =', isz1, jsz1, isz2, jsz2
+        write (OUTPUT_UNIT, *) 'ir, jz =', ir, jr
+
+        if (ir /= sr_x .or. jr /= sr_y) call Stop_simulation ('Tile dims do not preserve fire/atm ratio')
+
+      end subroutine Check_dims
 
     end subroutine Provide_atm_feedback
 
