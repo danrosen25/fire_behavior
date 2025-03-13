@@ -846,31 +846,31 @@
       if (DEBUG_LOCAL) call Check_dims (its, ite, jts, jte, ifts, ifte, jfts, jfte, sr_x, sr_y)
 
       avgw = 1.0 / (sr_x * sr_y)
-          do j = max (jds + 1, jts), min (jte, jde - 2)
-            jbase = jfts + sr_y * (j - jts)
-            do i = max (ids + 1, its), min (ite, ide - 2)
-              ibase = ifts + sr_x * (i - its)
-              canqfx(i, j) = 0.0
-              canhfx(i, j) = 0.0
-              grnsmk(i, j) = 0.0
-              grnhfx(i, j) = 0.0
-              grnqfx(i, j) = 0.0
-              convert_kg_m2_to_g_kg = 1000.0 / (rho(i, kts, j) * dz8w(i, kts, j))
-              do joff = 0, sr_y - 1
-                j_f = joff + jbase
-                do ioff = 0, sr_x - 1
-                  i_f = ioff + ibase
-                  grnsmk(i, j) = grnsmk(i, j) + emis_smoke(i_f, j_f)
-                  grnhfx(i, j) = grnhfx(i, j) + fgrnhfx(i_f, j_f) ! * config_flags%fire_atm_feedback
-                  grnqfx(i, j) = grnqfx(i, j) + fgrnqfx(i_f, j_f) ! * config_flags%fire_atm_feedback
-                end do
-              end do
-              grnhfx(i, j) = grnhfx(i, j) * avgw
-              grnqfx(i, j) = grnqfx(i, j) * avgw
-              grnsmk(i, j) = grnsmk(i, j) * convert_kg_m2_to_g_kg * avgw
-              if (tracer_opt == 3) smoke_tracer(i, kts, j) = smoke_tracer(i, kts, j) + grnsmk(i, j)
+      do j = max (jds + 1, jts), min (jte, jde - 2)
+        jbase = jfts + sr_y * (j - jts)
+        do i = max (ids + 1, its), min (ite, ide - 2)
+          ibase = ifts + sr_x * (i - its)
+          canqfx(i, j) = 0.0
+          canhfx(i, j) = 0.0
+          grnsmk(i, j) = 0.0
+          grnhfx(i, j) = 0.0
+          grnqfx(i, j) = 0.0
+          convert_kg_m2_to_g_kg = 1000.0 / (rho(i, kts, j) * dz8w(i, kts, j))
+          do joff = 0, sr_y - 1
+            j_f = joff + jbase
+            do ioff = 0, sr_x - 1
+              i_f = ioff + ibase
+              grnsmk(i, j) = grnsmk(i, j) + emis_smoke(i_f, j_f)
+              grnhfx(i, j) = grnhfx(i, j) + fgrnhfx(i_f, j_f) ! * config_flags%fire_atm_feedback
+              grnqfx(i, j) = grnqfx(i, j) + fgrnqfx(i_f, j_f) ! * config_flags%fire_atm_feedback
             end do
           end do
+          grnhfx(i, j) = grnhfx(i, j) * avgw
+          grnqfx(i, j) = grnqfx(i, j) * avgw
+          grnsmk(i, j) = grnsmk(i, j) * convert_kg_m2_to_g_kg * avgw
+          if (tracer_opt == 3) smoke_tracer(i, kts, j) = smoke_tracer(i, kts, j) + grnsmk(i, j)
+        end do
+      end do
 
       call Fire_tendency (               &
             ids,ide - 1,kds,kde,jds,jde - 1,     & ! dimensions
