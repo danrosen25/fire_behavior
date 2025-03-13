@@ -90,10 +90,11 @@
       real, dimension(ims:ime, kms:kme, jms:jme), intent (in) :: dz8w, p_phy, t_phy, qv, rho, smoke_tracer
       real, dimension(ims:ime, jms:jme), intent (out) ::  aod5502d_smoke
 
-                                   ! [m2 g-1]
-      real, parameter :: MASS_EXT_COEF = 4.5, RH_CRIT = 0.3, CONVERT_PERCENT_TO_UNITLESS = 0.01
+                                   ! 4.0 abs + 0.5 scattering [m2 g-1]
+      real, parameter :: MASS_EXT_COEF = 4.5, RH_CRIT = 0.3, RH_MAX = 0.95, CONVERT_PERCENT_TO_UNITLESS = 0.01
       real :: rh, augm_ext_coef
       integer :: i, k, j
+      logical, parameter :: DEBUG_LOCAL = .true.
 
 
       Loop_j_aod : do j = jts, min (jte, jde - 1)
@@ -101,18 +102,35 @@
           aod5502d_smoke(i, j) = 0.0
           Loop_k_aod : do k = kts, min (kte, kde - 1)
             rh = CONVERT_PERCENT_TO_UNITLESS * Calc_rh (p_phy(i, k, j), t_phy(i, k, j), qv(i, k, j))
+            rh = min (rh, RH_MAX)
             if (rh > RH_CRIT) then
               augm_ext_coef = MASS_EXT_COEF * ((1.0 - RH_CRIT) / (1.0 - rh)) ** 0.18
             else
               augm_ext_coef = MASS_EXT_COEF
             end if                                      !  [m2 g-1]        [g smoke kg-1 air]     [kg air m-3]    [m]
             aod5502d_smoke(i, j) = aod5502d_smoke(i, j) + augm_ext_coef * smoke_tracer(i, k, j) * rho(i, k, j) * dz8w(i, k, j)
-            if (i == 31 .and. j == 34) then
-               write (*, *) k, dz8w(i, k, j), rh, augm_ext_coef, rho(i, k, j), smoke_tracer(i, k, j), aod5502d_smoke(i, j)
-            end if
+            if (DEBUG_LOCAL) call Print_profile (i, j)
           end do Loop_k_aod
         end do Loop_i_aod
       end do Loop_j_aod
+
+    contains
+
+      subroutine Print_profile (i, j)
+
+        use, intrinsic :: iso_fortran_env, only : OUTPUT_UNIT
+
+        implicit none
+
+        integer, intent (in) :: i, j
+        integer, parameter :: I_TO_PRINT = 31, J_TO_PRINT = 34
+      
+
+        if (i == I_TO_PRINT .and. j == J_TO_PRINT) then
+          write (OUTPUT_UNIT, *) k, dz8w(i, k, j), rh, augm_ext_coef, rho(i, k, j), smoke_tracer(i, k, j), aod5502d_smoke(i, j)
+        end if
+
+      end subroutine Print_profile
 
     end subroutine Calc_smoke_aod
 
