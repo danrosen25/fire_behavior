@@ -4,6 +4,8 @@
     use constants_mod, only : XLV, CMBCNST
     use state_mod, only: state_fire_t
     use namelist_mod, only: namelist_t
+    use emis_mod, only : EMIS_WRFFIRE, EMIS_FMC_PM2P5
+    use stderrout_mod, only : Stop_simulation
 
     private
 
@@ -81,13 +83,44 @@
       integer, intent(in) :: ifts, ifte, jfts, jfte
 
       integer :: i, j
+      real :: emis_pm2p5
+      real, parameter :: PERCEN_CARBON_LITTER = 0.5
 
 
-      do j = jfts, jfte
-        do i = ifts, ifte
-          grid%emis_smoke(i, j) = config_flags%frac_fburnt_to_smoke * grid%fuel_frac_burnt_dt(i, j) * grid%fuel_load_g(i, j) ! kg/m^2
-        end do
-      end do
+      select case (config_flags%emis_opt)
+        case (EMIS_WRFFIRE)
+          write (*, *) 'Smoke WRF-Fire', config_flags%frac_fburnt_to_smoke
+          do j = jfts, jfte
+            do i = ifts, ifte
+              grid%emis_smoke(i, j) = config_flags%frac_fburnt_to_smoke * grid%fuel_frac_burnt_dt(i, j) * grid%fuel_load_g(i, j) ! kg/m^2
+            end do
+          end do
+
+        case (EMIS_FMC_PM2P5)
+             ! Assuminmg the fuel is litter for the moment
+          write (*, *) 'Smoke CFBM'
+          do j = jfts, jfte
+            do i = ifts, ifte
+              if (grid%fmc_g(i, j) <= 0.035) then
+                emis_pm2p5 = 8.1
+              else if (grid%fmc_g(i, j) <= 0.1) then
+                emis_pm2p5 = 8.1 + (160.5 - 8.1) / (0.1 - 0.035) * (grid%fmc_g(i, j) - 0.035)
+              else if (grid%fmc_g(i, j) <= 0.2) then
+                emis_pm2p5 = 160.5 + (179.9 - 160.5) / (0.2 - 0.1) * (grid%fmc_g(i, j) - 0.1)
+              else
+                emis_pm2p5 = 179.9
+              end if
+                ! 0.001 to convert to Kg which would be later coverted to g, until fixed
+              emis_pm2p5 = emis_pm2p5 * PERCEN_CARBON_LITTER * 0.001
+              grid%emis_smoke(i, j) = emis_pm2p5 * grid%fuel_frac_burnt_dt(i, j) * grid%fuel_load_g(i, j) ! kg/m^2
+!              if (grid%fuel_load_g(i, j)>0.0) write (*, *) i, j, grid%fmc_g(i, j), emis_pm2p5, grid%emis_smoke(i, j)
+            end do
+          end do
+
+        case default
+          call Stop_simulation ('The emission option selected does not exist.')
+
+      end select
 
     end subroutine Calc_smoke_emissions
 
