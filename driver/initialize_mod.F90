@@ -9,7 +9,7 @@
 
     private
 
-    public :: Init_fire_state, Init_atm_state
+    public :: Init_fire_state, Init_atm_state, Init_fire_state_within_wrf
 
   contains
 
@@ -89,5 +89,38 @@
       if (DEBUG_LOCAL) call Print_message ('  Leaving subroutine Init_state')
 
     end subroutine Init_fire_state
+
+    subroutine Init_fire_state_within_wrf (state, config_flags, &
+        ifds, ifde, ifms, ifme, ifps, ifpe, &
+        jfds, jfde, jfms, jfme, jfps, jfpe, &
+        kfds, kfde, kfms, kfme, kfps, kfpe, &
+        kfts, kfte, ide, jde, dx, dy, sr_x, sr_y, &
+        map_proj, cen_lat, cen_lon, truelat1, truelat2, stand_lon, &
+        nfuel_cat, zsf, dzdxf, dzdyf)
+
+      implicit none
+
+      type (state_fire_t), intent (in out) :: state
+      type (namelist_t), intent (in) :: config_flags
+      integer, intent (in) :: ifds, ifde, ifms, ifme, ifps, ifpe, &
+                              jfds, jfde, jfms, jfme, jfps, jfpe, &
+                              kfds, kfde, kfms, kfme, kfps, kfpe, &
+                              kfts, kfte, map_proj, sr_x, sr_y, ide, jde
+      real :: dx, dy, cen_lat, cen_lon, truelat1, truelat2, stand_lon
+      real, dimension(ifms:ifme, jfms:jfme), intent (in) :: nfuel_cat, zsf, dzdxf, dzdyf
+
+
+      call state%Initialization (config_flags, &
+          ifds = ifds, ifde = ifde, ifms = ifms, ifme = ifme, ifps = ifps, ifpe = ifpe, &
+          jfds = jfds, jfde = jfde, jfms = jfms, jfme = jfme, jfps = jfps, jfpe = jfpe, &
+          kfds = kfds, kfde = kfde, kfms = kfms, kfme = kfme, kfps = kfps, kfpe = kfpe, &
+          kfts = kfts, kfte = kfte, ide = ide, jde = jde, &
+          cen_lat = cen_lat, cen_lon = cen_lon, truelat1 = truelat1, &
+          truelat2 = truelat2, stand_lon = stand_lon, dx = dx, dy = dy, sr_x = sr_x, sr_y = sr_y, &
+          nfuel_cat = nfuel_cat, zsf = zsf, dzdxf = dzdxf, dzdyf = dzdyf)
+
+      call Init_fire_components (state, config_flags)
+
+    end subroutine Init_fire_state_within_wrf
 
   end module initialize_mod

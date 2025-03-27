@@ -52,6 +52,7 @@
       integer :: fuel_opt = 1 ! Fuel model
       integer :: ros_opt = 0  ! ROS parameterization
       integer :: fmc_opt = -1 ! FMC model
+      integer :: emis_opt = 0 ! Object to be added. 0) WRF-Fire emiss, 1) PM2.5 as a function of FMC
 
         ! Ignitions
       integer :: fire_num_ignitions = 0 ! "number of ignition lines"
@@ -182,6 +183,7 @@
       integer :: fuel_opt = 1 ! Fuel model
       integer :: ros_opt = 0 ! ROS parameterization
       integer :: fmc_opt = -1 ! FMC model
+      integer :: emis_opt = 0 ! Smoke emissions
 
         ! ignitions
       integer :: fire_num_ignitions = 0
@@ -219,7 +221,7 @@
           fire_wind_height, fire_is_real_perim, frac_fburnt_to_smoke, fuelmc_g, &
           fuelmc_g_live, fuelmc_c, &
             ! objects
-          fuel_opt, ros_opt, fmc_opt, &
+          fuel_opt, ros_opt, fmc_opt, emis_opt, &
             ! Ignitions
           fire_num_ignitions, &
             ! Ignition 1
@@ -279,6 +281,7 @@
       this%fuel_opt = fuel_opt
       this%ros_opt = ros_opt
       this%fmc_opt = fmc_opt
+      this%emis_opt = emis_opt
 
       this%fire_num_ignitions = fire_num_ignitions
 
