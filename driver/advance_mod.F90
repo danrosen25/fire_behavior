@@ -20,7 +20,7 @@
       type (state_fire_t), intent (in out) :: grid
       type (namelist_t), intent (in) :: config_flags
 
-      logical, parameter :: DEBUG_LOCAL = .false.
+      logical, parameter :: DEBUG_LOCAL = .true.
 
 
       if (DEBUG_LOCAL) call Print_message ('  Entering Advance_state... ')

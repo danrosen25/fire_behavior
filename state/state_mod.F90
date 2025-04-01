@@ -72,6 +72,7 @@
       class (ros_t), allocatable :: ros_param
       type (ignition_line_t) :: ignition_lines
       class (fmc_t), allocatable :: fmc_param
+      type (proj_lc_t) :: proj
 
         ! New vars defined on fire grid for NUOPC coupling
       real, dimension(:, :), allocatable :: fire_psfc       ! "Surface Pressure"  "Pa"
@@ -91,6 +92,7 @@
       integer :: ny ! "number of latitudinal grid points" "1"
       real :: cen_lat, cen_lon
     contains
+      procedure, public :: Allocate_vars => Allocate_vars
       procedure, public :: Convert_sb_to_ander => Convert_scottburgan_to_anderson
       procedure, public :: Handle_output => Handle_output
       procedure, public :: Handle_wrfdata_update => Handle_wrfdata_update
@@ -103,9 +105,63 @@
       procedure, public :: Interpolate_profile => Interpolate_profile
       procedure, public :: Print => Print_domain ! private
       procedure, public :: Save_state => Save_state
+      procedure, public :: Set_vars_to_default => Set_vars_to_default
+      procedure, public :: Set_time_stamps => Set_time_stamps
     end type state_fire_t
 
   contains
+
+    subroutine Allocate_vars (this, ifms, ifme, jfms, jfme)
+
+      implicit none
+
+      class (state_fire_t), intent(in out) :: this
+      integer, intent (in) :: ifms, ifme, jfms, jfme
+
+
+      allocate (this%uf(ifms:ifme, jfms:jfme))
+      allocate (this%vf(ifms:ifme, jfms:jfme))
+      allocate (this%fmc_g(ifms:ifme, jfms:jfme))
+      allocate (this%lfn(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_hist(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_0(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_1(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_2(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_s0(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_s1(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_s2(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_s3(ifms:ifme, jfms:jfme))
+      allocate (this%lfn_out(ifms:ifme, jfms:jfme))
+      allocate (this%fuel_load_g(ifms:ifme, jfms:jfme))
+      allocate (this%flame_length(ifms:ifme, jfms:jfme))
+      allocate (this%ros_front(ifms:ifme, jfms:jfme))
+      allocate (this%tign_g(ifms:ifme, jfms:jfme))
+      allocate (this%fuel_frac(ifms:ifme, jfms:jfme))
+      allocate (this%fire_area(ifms:ifme, jfms:jfme))
+      allocate (this%fuel_frac_burnt_dt(ifms:ifme, jfms:jfme))
+      allocate (this%fgrnhfx(ifms:ifme, jfms:jfme))
+      allocate (this%fgrnqfx(ifms:ifme, jfms:jfme))
+      allocate (this%fcanhfx(ifms:ifme, jfms:jfme))
+      allocate (this%fcanqfx(ifms:ifme, jfms:jfme))
+      allocate (this%ros(ifms:ifme, jfms:jfme))
+      allocate (this%fz0(ifms:ifme, jfms:jfme))
+      allocate (this%fuel_time(ifms:ifme, jfms:jfme))
+      allocate (this%fire_psfc(ifms:ifme, jfms:jfme))
+      allocate (this%fire_rain(ifms:ifme, jfms:jfme))
+      allocate (this%fire_t2(ifms:ifme, jfms:jfme))
+      allocate (this%fire_q2(ifms:ifme, jfms:jfme))
+      allocate (this%fire_rh_fire(ifms:ifme, jfms:jfme))
+      allocate (this%fire_psfc_old(ifms:ifme, jfms:jfme))
+      allocate (this%fire_rain_old(ifms:ifme, jfms:jfme))
+      allocate (this%fire_t2_old(ifms:ifme, jfms:jfme))
+      allocate (this%fire_q2_old(ifms:ifme, jfms:jfme))
+      allocate (this%zsf(ifms:ifme, jfms:jfme))
+      allocate (this%dzdxf(ifms:ifme, jfms:jfme))
+      allocate (this%dzdyf(ifms:ifme, jfms:jfme))
+      allocate (this%nfuel_cat(ifms:ifme, jfms:jfme))
+      allocate (this%emis_smoke(ifms:ifme, jfms:jfme))
+
+    end subroutine Allocate_vars
 
     subroutine Convert_scottburgan_to_anderson (this)
 
@@ -174,17 +230,31 @@
 
     end subroutine Handle_wrfdata_update
 
-    subroutine Init_domain (this, config_flags, geogrid)
+    subroutine Init_domain (this, config_flags, geogrid, &
+                            ifds, ifde, ifms, ifme, ifps, ifpe, &
+                            jfds, jfde, jfms, jfme, jfps, jfpe, &
+                            kfds, kfde, kfms, kfme, kfps, kfpe, &
+                            kfts, kfte, ide, jde, &
+                            cen_lat, cen_lon, truelat1, truelat2, stand_lon, &
+                            dx, dy, sr_x, sr_y, nfuel_cat, zsf, dzdxf, dzdyf)
+
 
       implicit none
 
       class (state_fire_t), intent(in out) :: this
       type (namelist_t), intent (in) :: config_flags
       type (geogrid_t), intent (in), optional :: geogrid
+      integer, intent (in), optional :: ifds, ifde, ifms, ifme, ifps, ifpe, &
+                                        jfds, jfde, jfms, jfme, jfps, jfpe, &
+                                        kfds, kfde, kfms, kfme, kfps, kfpe, &
+                                        kfts, kfte, sr_x, sr_y, ide, jde
+      real, intent (in), optional :: cen_lat, cen_lon, truelat1, truelat2, stand_lon, dx, dy
+      real, dimension(:, :), intent (in), optional :: nfuel_cat, zsf, dzdxf, dzdyf
 
-      logical, parameter :: DEBUG_LOCAL = .false.
-      integer :: ids0, ide0, jds0, jde0, i, j
+      integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2
       type (proj_lc_t) :: proj
+      logical, parameter :: DEBUG_LOCAL = .false.
+      integer :: ids0, ide0, jds0, jde0, i, j, init_mode
       logical :: is_ideal_sim
 
 
@@ -225,46 +295,81 @@
         proj = geogrid%Get_atm_proj ()
       end if Ideal_sim1
 
-      this%ifds = ids0
-      this%ifde = ide0
-      this%ifms = ids0 - N_POINTS_IN_HALO
-      this%ifme = ide0 + N_POINTS_IN_HALO
-      this%ifps = ids0
-      this%ifpe = ide0
 
-      this%jfds = jds0
-      this%jfde = jde0
-      this%jfms = jds0 - N_POINTS_IN_HALO
-      this%jfme = jde0 + N_POINTS_IN_HALO
-      this%jfps = jds0
-      this%jfpe = jde0
+      init_mode = INIT_MODE_NONE
+      if (present (geogrid)) init_mode = INIT_MODE_GEOGRID
+      if (present (ifds) .and. present (ifde) .and. present (ifms) .and. present (ifme) .and. present (ifps) .and. present (ifpe) .and. &
+          present (jfds) .and. present (jfde) .and. present (jfms) .and. present (jfme) .and. present (jfps) .and. present (jfpe) .and. &
+          present (kfds) .and. present (kfde) .and. present (kfms) .and. present (kfme) .and. present (kfps) .and. present (kfpe) .and. &
+          present (kfts) .and. present (kfte) .and. present (ide) .and. present (jde) .and. &
+          present (cen_lat) .and. present (cen_lon) .and. present (truelat1) .and. present (truelat2) .and. present (stand_lon) .and. &
+          present (dx) .and. present (dy) .and. present (sr_x) .and. present (sr_y) .and. present (nfuel_cat) .and. present (zsf) .and. &
+          present (dzdxf) .and. present (dzdyf)) &
+          init_mode = INIT_MODE_WRF
 
-      this%kfds = config_flags%kds
-      this%kfde = config_flags%kde
-      this%kfms = config_flags%kds
-      this%kfme = config_flags%kde
-      this%kfps = config_flags%kds
-      this%kfpe = config_flags%kde
-      this%kfts = config_flags%kds
-      this%kfte = config_flags%kde
+      if (init_mode == INIT_MODE_NONE) &
+          call Stop_simulation ('Not enough information to initialize domain')
 
-        ! Datetimes
-      this%datetime_start = datetime_t (config_flags%start_year, config_flags%start_month, config_flags%start_day, &
-          config_flags%start_hour, config_flags%start_minute, config_flags%start_second)
-      this%datetime_end = datetime_t (config_flags%end_year, config_flags%end_month, config_flags%end_day, &
-          config_flags%end_hour, config_flags%end_minute, config_flags%end_second)
-      this%datetime_now = this%datetime_start
+        ! Set dimensions
+      Set_dims: select case (init_mode)
+        case (INIT_MODE_GEOGRID)
+          ids0 = geogrid%ifds
+          ide0 = geogrid%ifde
+          jds0 = geogrid%jfds
+          jde0 = geogrid%jfde
 
-      this%datetime_next_output = this%datetime_start
-      call this%datetime_next_output%Add_seconds (config_flags%interval_output)
+          this%ifds = ids0
+          this%ifde = ide0
+          this%ifms = ids0 - N_POINTS_IN_HALO
+          this%ifme = ide0 + N_POINTS_IN_HALO
+          this%ifps = ids0
+          this%ifpe = ide0
 
-      this%datetime_next_atm_update = this%datetime_start
+          this%jfds = jds0
+          this%jfde = jde0
+          this%jfms = jds0 - N_POINTS_IN_HALO
+          this%jfme = jde0 + N_POINTS_IN_HALO
+          this%jfps = jds0
+          this%jfpe = jde0
 
+          this%kfds = config_flags%kds
+          this%kfde = config_flags%kde
+          this%kfms = config_flags%kds
+          this%kfme = config_flags%kde
+          this%kfps = config_flags%kds
+          this%kfpe = config_flags%kde
+          this%kfts = config_flags%kds
+          this%kfte = config_flags%kde
 
-      if (DEBUG_LOCAL) call this%Print()
+        case (INIT_MODE_WRF)
+          this%ifds = ifds
+          this%ifde = ifde
+          this%ifms = ifms
+          this%ifme = ifme
+          this%ifps = ifps
+          this%ifpe = ifpe
 
-      this%nx = this%ifde
-      this%ny = this%jfde
+          this%jfds = jfds
+          this%jfde = jfde
+          this%jfms = jfms
+          this%jfme = jfme
+          this%jfps = jfps
+          this%jfpe = jfpe
+
+          this%kfds = kfds
+          this%kfde = kfde
+          this%kfms = kfms
+          this%kfme = kfme
+          this%kfps = kfps
+          this%kfpe = kfpe
+          this%kfts = kfts
+          this%kfte = kfte
+
+        case default
+
+          call Stop_simulation ('Not ready to complete fire state initialization 1')
+
+      end select Set_dims
 
       allocate (this%uf(this%ifms:this%ifme, this%jfms:this%jfme))
       allocate (this%vf(this%ifms:this%ifme, this%jfms:this%jfme))
@@ -368,7 +473,80 @@
 
       call this%Init_tiles (config_flags)
 
+      this%nx = this%ifde
+      this%ny = this%jfde
+      this%dt = config_flags%dt
+
+        ! Init memory
+      call this%Allocate_vars (this%ifms, this%ifme, this%jfms, this%jfme)
+
+        ! Set projection
+      Set_proj: select case (init_mode)
+        case (INIT_MODE_GEOGRID)
+          proj = geogrid%Get_atm_proj ()
+          call this%Init_latlons (proj, srx = geogrid%sr_x, sry = geogrid%sr_y)
+
+          this%cen_lat = geogrid%cen_lat
+          this%cen_lon = geogrid%cen_lon
+
+          this%dx = geogrid%dx / geogrid%sr_x
+          this%dy = geogrid%dy / geogrid%sr_y
+
+        case (INIT_MODE_WRF)
+          proj = proj_lc_t (cen_lat = cen_lat , cen_lon = cen_lon, dx = dx, dy = dy, &
+            standard_lon = stand_lon, true_lat_1 = truelat1, true_lat_2 = truelat2, nx = ide - 1, ny = jde - 1)
+          call this%Init_latlons (proj, srx = sr_x, sry = sr_y)
+
+          this%cen_lat = cen_lat
+          this%cen_lon = cen_lon
+
+          this%dx = dx / sr_x
+          this%dy = dy / sr_y
+
+        case default
+          call Stop_simulation ('Not ready to complete fire state initialization 2')
+
+      end select Set_proj
+      this%proj = proj
+
+        ! Init vars
+      call this%Set_vars_to_default (config_flags)
+
+      Set_topo_fuels: select case (init_mode)
+        case (INIT_MODE_GEOGRID)
+          this%zsf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%elevations
+          this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dxs
+          this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dys
+          this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%fuel_cats
+
+          if (config_flags%fire_is_real_perim) then
+            if (allocated (geogrid%lfn_init)) then
+              this%lfn_hist(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%lfn_init
+            else
+              Call Stop_simulation ('Attenting to initialize fire from given  perimeter but no initialization data present')
+            end if
+          end if
+
+        case (INIT_MODE_WRF)
+          this%zsf(this%ifms:this%ifme, this%jfms:this%jfme) = zsf
+          this%dzdxf(this%ifms:this%ifme, this%jfms:this%jfme) = dzdxf
+          this%dzdyf(this%ifms:this%ifme, this%jfms:this%jfme) = dzdyf
+          this%nfuel_cat(this%ifms:this%ifme, this%jfms:this%jfme) = nfuel_cat
+          if (config_flags%fire_is_real_perim) &
+              !this%lfn_hist(this%ifms:this%ifme, this%jfms:this%jfme) = lfn_hist
+              call Stop_simulation ('Not ready to initialize from fire perimeter inside WRF')
+
+        case default
+          call Stop_simulation ('Not ready to complete fire state initialization 3')
+
+      end select Set_topo_fuels
+
       if (config_flags%fuel_opt == FUEL_ANDERSON) call this%Convert_sb_to_ander ()
+
+        ! Set clock
+      call this%Set_time_stamps (config_flags)
+
+      if (DEBUG_LOCAL) call this%Print()
 
     end subroutine Init_domain
 
@@ -424,7 +602,6 @@
       implicit none
 
       class (state_fire_t), intent (in out) :: this
-!      type (geogrid_t), intent(in) :: geogrid
       type (proj_lc_t), intent(in) :: proj
       integer, optional :: srx, sry
 
@@ -446,17 +623,11 @@
       allocate (this%lons_c(this%nx + 1, this%ny + 1))
       allocate (this%lats_c(this%nx + 1, this%ny + 1))
 
-!      proj = geogrid%Get_atm_proj ()
-
-!      offset_corners_x = (1.0 / real (geogrid%sr_x)) / 2.0
-!      offset_corners_y = (1.0 / real (geogrid%sr_y)) / 2.0
       offset_corners_x = (1.0 / real (sr_x)) / 2.0
       offset_corners_y = (1.0 / real (sr_y)) / 2.0
 
       do j = 1, this%ny
         do i = 1, this%nx
-!          i_atm = (i - OFFSET) / geogrid%sr_x + OFFSET
-!          j_atm = (j - OFFSET) / geogrid%sr_y + OFFSET
           i_atm = (i - OFFSET) / sr_x + OFFSET
           j_atm = (j - OFFSET) / sr_y + OFFSET
           call proj%Calc_latlon (i = i_atm, j = j_atm, lat = this%lats(i, j), lon = this%lons(i, j))
@@ -466,8 +637,6 @@
       end do
 
       do j = 1, this%ny
-!        i_atm = (this%nx - OFFSET) / geogrid%sr_x + OFFSET
-!        j_atm = (j - OFFSET) / geogrid%sr_y + OFFSET
         i_atm = (this%nx - OFFSET) / sr_x + OFFSET
         j_atm = (j - OFFSET) / sr_y + OFFSET
         call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm - offset_corners_y, &
@@ -475,16 +644,12 @@
       end do
 
       do i = 1, this%nx
-!        i_atm = (i - OFFSET) / geogrid%sr_x + OFFSET
-!        j_atm = (this%ny - OFFSET) / geogrid%sr_y + OFFSET
         i_atm = (i - OFFSET) / sr_x + OFFSET
         j_atm = (this%ny - OFFSET) / sr_y + OFFSET
         call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm + offset_corners_y, &
             lat = this%lats_c(i, this%ny + 1), lon = this%lons_c(i, this%ny + 1))
       end do
 
-!      i_atm = (this%nx - OFFSET) / geogrid%sr_x + OFFSET
-!      j_atm = (this%ny - OFFSET) / geogrid%sr_y + OFFSET
       i_atm = (this%nx - OFFSET) / sr_x + OFFSET
       j_atm = (this%ny - OFFSET) / sr_y + OFFSET
       call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm + offset_corners_y, &
@@ -500,6 +665,7 @@
       type (namelist_t), intent (in) :: config_flags
 
       integer :: num_tiles
+
 
       num_tiles = config_flags%num_tiles
       call Calc_tiles_dims (this%ifps, this%ifpe, this%jfps, this%jfpe, num_tiles, &
@@ -721,6 +887,54 @@
       call Add_netcdf_var (file_output, ['nx', 'ny'], 'nfuel_cat', this%nfuel_cat(1:this%nx, 1:this%ny))
 
     end subroutine Save_state
+
+    subroutine Set_time_stamps (this, config_flags)
+
+      implicit none
+
+      class (state_fire_t), intent (in out) :: this
+      type (namelist_t), intent (in) :: config_flags
+
+
+      this%datetime_start = datetime_t (config_flags%start_year, config_flags%start_month, config_flags%start_day, &
+          config_flags%start_hour, config_flags%start_minute, config_flags%start_second)
+      this%datetime_end = datetime_t (config_flags%end_year, config_flags%end_month, config_flags%end_day, &
+          config_flags%end_hour, config_flags%end_minute, config_flags%end_second)
+      this%datetime_now = this%datetime_start
+
+      this%datetime_next_output = this%datetime_start
+      call this%datetime_next_output%Add_seconds (config_flags%interval_output)
+
+      this%datetime_next_atm_update = this%datetime_start
+
+    end subroutine Set_time_stamps
+
+    subroutine Set_vars_to_default (this, config_flags)
+
+      implicit none
+
+      class (state_fire_t), intent (in out) :: this
+      type (namelist_t), intent (in) :: config_flags
+
+
+      this%uf = 0.0
+      this%vf = 0.0
+      this%fmc_g = config_flags%fuelmc_g
+        ! Init lfn more than the largest domain side
+      this%lfn(this%ifds:this%ifde, this%jfds:this%jfde) = 2.0 * &
+          max ((this%ifde - this%ifds + 1) * this%dx, (this%jfde - this%jfds + 1) * this%dy)
+        ! Init tign_g a bit into the future
+      this%tign_g(this%ifps:this%ifpe, this%jfps:this%jfpe) = epsilon (this%tign_g)
+
+      this%fuel_frac(this%ifds:this%ifde, this%jfds:this%jfde) = 1.0
+      this%fire_area(this%ifds:this%ifde, this%jfds:this%jfde) = 0.0
+
+      this%emis_smoke = 0.0
+
+      this%unit_fxlat = 2.0 * PI / (360.0 * RERADIUS)  ! earth circumference in m / 360 degrees
+      this%unit_fxlong = cos (this%cen_lat * 2.0 * PI / 360.0) * this%unit_fxlat  ! latitude
+
+    end subroutine Set_vars_to_default
 
   end module state_mod
 

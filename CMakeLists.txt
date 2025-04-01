@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.18)
 project(
   ufs_fire_behavior 
   VERSION 0.0.1
-  LANGUAGES Fortran CXX)
+  LANGUAGES Fortran CXX C )
 
 # user defined cmake modules
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/")
@@ -37,7 +37,11 @@ set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mod")
 install(DIRECTORY ${CMAKE_Fortran_MODULE_DIRECTORY} DESTINATION ${CMAKE_INSTALL_PREFIX})
 
 # third party libraries
-find_package(NetCDF REQUIRED Fortran)
+if(${CMAKE_PROJECT_NAME} STREQUAL "WRF")
+  find_package(netCDF-Fortran REQUIRED)
+else()
+  find_package(NetCDF REQUIRED Fortran)
+endif()
 
 # turn on DM_PARALLEL preprocessor directive
 if(DM_PARALLEL)
@@ -55,9 +59,11 @@ list(APPEND _state_files state/state_mod.F90
 
 list(APPEND _share_files share/proj_lc_mod.F90
                          share/datetime_mod.F90
+			 share/emis_mod.F90
 			 share/fuel_mod.F90
 			 share/ros_mod.F90
 			 share/fmc_mod.F90
+			 share/interp_mod.F90
                          share/constants_mod.F90)
 
 # IO
@@ -88,14 +94,28 @@ list(APPEND _driver_files driver/advance_mod.F90
 
 # configure fire behavior library
 add_library(firelib STATIC ${_state_files} ${_share_files} ${_io_files} ${_wrffire_physics} ${_driver_files})
-target_include_directories(firelib PUBLIC ${NetCDF_INCLUDE_DIRS})
-target_link_libraries(firelib PUBLIC $<BUILD_INTERFACE:${NetCDF_LIBRARIES}>)
+if(${CMAKE_PROJECT_NAME} STREQUAL "WRF")
+  target_link_libraries(firelib PUBLIC netCDF::netcdff )
+else()
+  target_include_directories(firelib PUBLIC ${NetCDF_INCLUDE_DIRS})
+  target_link_libraries(firelib PUBLIC $<BUILD_INTERFACE:${NetCDF_LIBRARIES}>)
+endif()
+if (DM_PARALLEL)
+  target_link_libraries(firelib PUBLIC $<BUILD_INTERFACE:MPI::MPI_Fortran>)
+endif()
+set_target_properties( 
+                      firelib
+                      PROPERTIES
+                        Fortran_FORMAT           FREE
+                      )
 
 # configure fire behavior executable
 add_executable(fire_behavior.exe driver/fire_behavior.F90)
 add_dependencies(fire_behavior.exe firelib)
 target_link_libraries(fire_behavior.exe PUBLIC firelib)
-target_link_libraries(fire_behavior.exe PUBLIC NetCDF::NetCDF_Fortran)
+if(NOT ${CMAKE_PROJECT_NAME} STREQUAL "WRF")
+  target_link_libraries(fire_behavior.exe PUBLIC NetCDF::NetCDF_Fortran)
+endif()
 install(TARGETS fire_behavior.exe DESTINATION bin)
 
 if(NUOPC OR ESMX)
