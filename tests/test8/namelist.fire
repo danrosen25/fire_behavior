@@ -39,3 +39,5 @@
  fmoist_freq = 1,       ! Fuel moisture model updated every time step
 /
 
+ &ideal
+ /

@@ -9,6 +9,12 @@
     public :: namelist_t, FIRE_MAX_IGNITIONS_IN_NAMELIST
 
     integer, parameter :: FIRE_MAX_IGNITIONS_IN_NAMELIST = 5
+      ! Default ideal block
+    real, parameter :: DX_DEFAULT = 100.0, U_DEFAULT = 5.0, V_DEFAULT = 0.0, LAT_DEFAULT = 40.3636, LON_DEFAULT = -4.4035, &
+       DZ_DX_DEFAULT = 0.0, ELEVATION_DEFAULT = 0.0
+    integer, parameter :: IDEAL_OPT_DEFAULT = 0, NX_DEFAULT = 100, FUEL_CAT_DEFAULT = 1
+      ! Default options
+    integer, parameter :: NO_FMC_MODEL = -1
 
     type :: namelist_t
       integer :: start_year = -1, start_month = -1, start_day = -1, start_hour = -1, start_minute = -1, start_second = -1, &
@@ -51,7 +57,7 @@
         ! Objects
       integer :: fuel_opt = 1 ! Fuel model
       integer :: ros_opt = 0  ! ROS parameterization
-      integer :: fmc_opt = -1 ! FMC model
+      integer :: fmc_opt = NO_FMC_MODEL ! FMC model
       integer :: emis_opt = 0 ! Object to be added. 0) WRF-Fire emiss, 1) PM2.5 as a function of FMC
 
         ! Ignitions
@@ -102,16 +108,49 @@
       real :: fire_ignition_end_time5 = 0.0
       real :: fire_ignition_radius5 = 0.0
 
+        ! Ideal block
+      integer :: ideal_opt = IDEAL_OPT_DEFAULT  ! 0) real world, 1) ideal
+      real :: dx = DX_DEFAULT
+      real :: dy = DX_DEFAULT
+      integer :: nx = NX_DEFAULT
+      integer :: ny = NX_DEFAULT
+
+      real :: zonal_wind = U_DEFAULT
+      real :: meridional_wind = V_DEFAULT
+      integer :: fuel_cat = FUEL_CAT_DEFAULT
+      real :: dz_dx = DZ_DX_DEFAULT
+      real :: dz_dy = DZ_DX_DEFAULT
+      real :: elevation = ELEVATION_DEFAULT
+
+      real :: cen_lat = LAT_DEFAULT
+      real :: cen_lon = LON_DEFAULT
+      real :: stand_lon = LON_DEFAULT
+      real :: true_lat_1 = LAT_DEFAULT
+      real :: true_lat_2 = LAT_DEFAULT
+
         ! Atmosphere
       integer :: kds = 1, kde = 1
     contains
+      procedure, public :: Check_nml => Check_nml
       procedure, public :: Initialization => Init_namelist
       procedure, public :: Init_fire_block => Init_fire_block
+      procedure, public :: Init_ideal_block => Init_ideal_block
       procedure, public :: Init_time_block => Init_time_block
       procedure, public :: Init_atm_block => Init_atm_block_legacy
     end type namelist_t
 
   contains
+
+    subroutine Check_nml (this)
+
+      implicit none
+
+      class (namelist_t), intent (in out) :: this
+
+      if (this%ideal_opt /= 0 .and. this%fmoist_run) &
+          call Stop_simulation ('ideal runs do not support a FMC model')
+
+    end subroutine Check_nml
 
     subroutine Init_atm_block_legacy (this, file_name)
 
@@ -332,6 +371,76 @@
 
     end subroutine Init_fire_block
 
+    subroutine Init_ideal_block (this, file_name)
+
+      implicit none
+
+      class (namelist_t), intent (in out) :: this
+      character (len = *), intent (in) :: file_name
+
+      real :: dx, dy, zonal_wind, meridional_wind, cen_lat, cen_lon, stand_lon, true_lat_1, true_lat_2, &
+          dz_dx, dz_dy, elevation
+      integer :: nx, ny, fuel_cat, ideal_opt
+
+      character (len = :), allocatable :: msg
+      integer :: unit_nml, io_stat
+
+      namelist /ideal/ ideal_opt, dx, dy, nx, ny, zonal_wind, meridional_wind, fuel_cat, &
+          dz_dx, dz_dy, elevation, cen_lat, cen_lon, stand_lon, true_lat_1, true_lat_2
+
+
+        ! Set default values
+      ideal_opt = IDEAL_OPT_DEFAULT
+      dx = DX_DEFAULT
+      dy = DX_DEFAULT
+      nx = NX_DEFAULT
+      ny = NX_DEFAULT
+
+      zonal_wind = U_DEFAULT
+      meridional_wind = V_DEFAULT
+      fuel_cat = FUEL_CAT_DEFAULT
+      dz_dx = DZ_DX_DEFAULT
+      dz_dy = DZ_DX_DEFAULT
+      elevation = ELEVATION_DEFAULT
+
+      cen_lat = LAT_DEFAULT
+      cen_lon = LON_DEFAULT
+      stand_lon = LON_DEFAULT
+      true_lat_1 = LAT_DEFAULT
+      true_lat_2 = LAT_DEFAULT
+
+      open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
+      if (io_stat /= 0) then
+        msg = 'Problems opening namelist file ' // trim (file_name)
+        call Stop_simulation (msg)
+      end if
+
+      read (unit_nml, nml = ideal, iostat = io_stat)
+      if (io_stat /= 0) call Stop_simulation ('Problems reading namelist ideal block')
+      close (unit_nml)
+
+      this%ideal_opt = ideal_opt
+      this%dx = dx
+      this%dy = dy
+
+      this%nx = nx
+      this%ny = ny
+
+      this%zonal_wind = zonal_wind
+      this%meridional_wind = meridional_wind
+      this%fuel_cat = fuel_cat
+      this%dz_dx = dz_dx
+      this%dz_dy = dz_dy
+      this%elevation = elevation
+
+      this%cen_lat = cen_lat
+      this%cen_lon = cen_lon
+      this%stand_lon = stand_lon
+      this%true_lat_1 = true_lat_1
+      this%true_lat_2 = true_lat_2
+
+    end subroutine Init_ideal_block
+
     subroutine Init_time_block (this, file_name)
 
       implicit none
@@ -412,6 +521,9 @@
       call this%Init_time_block (file_name = trim (file_name))
       call this%Init_fire_block (file_name = trim (file_name))
       call this%Init_atm_block (file_name = trim (file_name))
+      call this%Init_ideal_block (file_name = trim (file_name))
+
+      call this%Check_nml ()
 
       if (DEBUG_LOCAL) call Print_message ('  Leaving subroutine Read_namelist')
 

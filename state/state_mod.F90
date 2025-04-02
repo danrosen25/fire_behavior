@@ -251,13 +251,14 @@
       real, intent (in), optional :: cen_lat, cen_lon, truelat1, truelat2, stand_lon, dx, dy
       real, dimension(:, :), intent (in), optional :: nfuel_cat, zsf, dzdxf, dzdyf
 
-      integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2
+      integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2, INIT_MODE_IDEAL = 3
       type (proj_lc_t) :: proj
       logical, parameter :: DEBUG_LOCAL = .false.
-      integer :: ids0, ide0, jds0, jde0, init_mode
+      integer :: ids0, ide0, jds0, jde0, i, j, init_mode
 
 
       init_mode = INIT_MODE_NONE
+      if (config_flags%ideal_opt == 1) init_mode = INIT_MODE_IDEAL
       if (present (geogrid)) init_mode = INIT_MODE_GEOGRID
       if (present (ifds) .and. present (ifde) .and. present (ifms) .and. present (ifme) .and. present (ifps) .and. present (ifpe) .and. &
           present (jfds) .and. present (jfde) .and. present (jfms) .and. present (jfme) .and. present (jfps) .and. present (jfpe) .and. &
@@ -273,11 +274,18 @@
 
         ! Set dimensions
       Set_dims: select case (init_mode)
-        case (INIT_MODE_GEOGRID)
-          ids0 = geogrid%ifds
-          ide0 = geogrid%ifde
-          jds0 = geogrid%jfds
-          jde0 = geogrid%jfde
+        case (INIT_MODE_GEOGRID, INIT_MODE_IDEAL)
+          if (init_mode == INIT_MODE_GEOGRID) then
+            ids0 = geogrid%ifds
+            ide0 = geogrid%ifde
+            jds0 = geogrid%jfds
+            jde0 = geogrid%jfde
+          else if (init_mode == INIT_MODE_IDEAL) then
+            ids0 = 1
+            ide0 = config_flags%nx
+            jds0 = 1
+            jde0 = config_flags%ny
+          end if 
 
           this%ifds = ids0
           this%ifde = ide0
@@ -364,6 +372,19 @@
           this%dx = dx / sr_x
           this%dy = dy / sr_y
 
+        case (INIT_MODE_IDEAL)
+          this%dx = config_flags%dx
+          this%dy = config_flags%dy
+
+          this%cen_lat = config_flags%cen_lat
+          this%cen_lon = config_flags%cen_lon
+
+          proj = proj_lc_t (cen_lat = this%cen_lat , cen_lon = this%cen_lon, dx = this%dx, dy = this%dy, &
+              standard_lon = config_flags%stand_lon, true_lat_1 = config_flags%true_lat_1, &
+              true_lat_2 = config_flags%true_lat_2, nx = config_flags%nx, ny = config_flags%ny)
+
+          call this%Init_latlons (proj)
+
         case default
           call Stop_simulation ('Not ready to complete fire state initialization 2')
 
@@ -396,6 +417,21 @@
           if (config_flags%fire_is_real_perim) &
               !this%lfn_hist(this%ifms:this%ifme, this%jfms:this%jfme) = lfn_hist
               call Stop_simulation ('Not ready to initialize from fire perimeter inside WRF')
+
+        case (INIT_MODE_IDEAL)
+          do j = this%jfds, this%jfde
+            do i = this%ifds, this%ifde
+              this%zsf(i, j) = config_flags%elevation + &
+                               (i - this%ifds) * config_flags%dz_dx * config_flags%dx + &
+                               (j - this%jfds) * config_flags%dz_dy * config_flags%dy
+            end do
+          end do
+          this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dx
+          this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dy
+          this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%fuel_cat
+
+          if (config_flags%fire_is_real_perim) &
+              call Stop_simulation ('Not ready to initialize from fire perimeter in idealized mode')
 
         case default
           call Stop_simulation ('Not ready to complete fire state initialization 3')
@@ -778,8 +814,13 @@
       type (namelist_t), intent (in) :: config_flags
 
 
-      this%uf = 0.0
-      this%vf = 0.0
+      if (config_flags%ideal_opt == 1) then
+        this%uf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%zonal_wind
+        this%vf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%meridional_wind
+      else
+        this%uf = 0.0
+        this%vf = 0.0
+      end if
       this%fmc_g = config_flags%fuelmc_g
         ! Init lfn more than the largest domain side
       this%lfn(this%ifds:this%ifde, this%jfds:this%jfde) = 2.0 * &

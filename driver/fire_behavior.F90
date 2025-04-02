@@ -17,6 +17,7 @@
     type (wrf_t) :: atm_state
     type (namelist_t) :: config_flags
 
+
 #ifdef DM_PARALLEL
     call mpi_init (ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -28,14 +29,25 @@
       ! Read namelist
     call config_flags%Initialization (file_name = 'namelist.fire')
 
-    call Init_atm_state (atm_state, config_flags)
-    call Init_fire_state (grid, config_flags, atm_state)
+    select case (config_flags%ideal_opt)
+      case (0)
+        call Init_atm_state (atm_state, config_flags)
+        call Init_fire_state (grid, config_flags, atm_state)
+
+      case (1)
+        call Init_fire_state (grid, config_flags)
+
+      case default
+        write (ERROR_UNIT, *) 'ERROR: ideal_opt option not supported: ', config_flags%ideal_opt
+        stop
+
+    end select
     call grid%Save_state ()
 
     do while (grid%datetime_now < grid%datetime_end)
       call Advance_state (grid, config_flags)
       call grid%Handle_output (config_flags)
-      call grid%Handle_wrfdata_update (atm_state, config_flags)
+      if (config_flags%ideal_opt == 0) call grid%Handle_wrfdata_update (atm_state, config_flags)
     end do
 
 #ifdef DM_PARALLEL
