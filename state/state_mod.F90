@@ -251,52 +251,14 @@
       real, intent (in), optional :: cen_lat, cen_lon, truelat1, truelat2, stand_lon, dx, dy
       real, dimension(:, :), intent (in), optional :: nfuel_cat, zsf, dzdxf, dzdyf
 
-      integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2
+      integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2, INIT_MODE_IDEAL = 3
       type (proj_lc_t) :: proj
       logical, parameter :: DEBUG_LOCAL = .false.
       integer :: ids0, ide0, jds0, jde0, i, j, init_mode
-      logical :: is_ideal_sim
-
-
-      if (present (geogrid)) then
-        is_ideal_sim = .false.
-      else
-        is_ideal_sim = .true.
-      end if
-
-        ! Domain dimensions
-      Ideal_sim1: if (is_ideal_sim) then
-        ids0 = 1
-        ide0 = config_flags%nx
-        jds0 = 1
-        jde0 = config_flags%ny
-
-        this%dx = config_flags%dx
-        this%dy = config_flags%dy
-
-        this%cen_lat = config_flags%cen_lat
-        this%cen_lon = config_flags%cen_lon
-
-        proj = proj_lc_t (cen_lat = this%cen_lat , cen_lon = this%cen_lon, dx = this%dx, dy = this%dy, &
-            standard_lon = config_flags%stand_lon, true_lat_1 = config_flags%true_lat_1, &
-            true_lat_2 = config_flags%true_lat_2, nx = config_flags%nx, ny = config_flags%ny)
-      else
-        ids0 = geogrid%ifds
-        ide0 = geogrid%ifde
-        jds0 = geogrid%jfds
-        jde0 = geogrid%jfde
-
-        this%dx = geogrid%dx / geogrid%sr_x
-        this%dy = geogrid%dy / geogrid%sr_y
-
-        this%cen_lat = geogrid%cen_lat
-        this%cen_lon = geogrid%cen_lon
-
-        proj = geogrid%Get_atm_proj ()
-      end if Ideal_sim1
 
 
       init_mode = INIT_MODE_NONE
+      if (config_flags%ideal_opt == 1) init_mode = INIT_MODE_IDEAL
       if (present (geogrid)) init_mode = INIT_MODE_GEOGRID
       if (present (ifds) .and. present (ifde) .and. present (ifms) .and. present (ifme) .and. present (ifps) .and. present (ifpe) .and. &
           present (jfds) .and. present (jfde) .and. present (jfms) .and. present (jfme) .and. present (jfps) .and. present (jfpe) .and. &
@@ -312,11 +274,18 @@
 
         ! Set dimensions
       Set_dims: select case (init_mode)
-        case (INIT_MODE_GEOGRID)
-          ids0 = geogrid%ifds
-          ide0 = geogrid%ifde
-          jds0 = geogrid%jfds
-          jde0 = geogrid%jfde
+        case (INIT_MODE_GEOGRID, INIT_MODE_IDEAL)
+          if (init_mode == INIT_MODE_GEOGRID) then
+            ids0 = geogrid%ifds
+            ide0 = geogrid%ifde
+            jds0 = geogrid%jfds
+            jde0 = geogrid%jfde
+          else if (init_mode == INIT_MODE_IDEAL) then
+            ids0 = 1
+            ide0 = config_flags%nx
+            jds0 = 1
+            jde0 = config_flags%ny
+          end if 
 
           this%ifds = ids0
           this%ifde = ide0
@@ -371,106 +340,6 @@
 
       end select Set_dims
 
-      allocate (this%uf(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%vf(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fmc_g(this%ifms:this%ifme, this%jfms:this%jfme))
-      this%fmc_g = config_flags%fuelmc_g
-
-        ! Init lfn more than the largest domain side
-      allocate (this%lfn(this%ifms:this%ifme, this%jfms:this%jfme))
-      this%lfn(this%ifds:this%ifde, this%jfds:this%jfde) = 2.0 * &
-          max ((this%ifde - this%ifds + 1) * this%dx, (this%jfde - this%jfds + 1) * this%dy)
-
-      allocate (this%lfn_hist(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_0(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_1(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_2(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_s0(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_s1(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_s2(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_s3(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lfn_out(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fuel_load_g(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%flame_length(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%ros_front(this%ifms:this%ifme, this%jfms:this%jfme))
-
-        ! Init tign_g a bit into the future
-      allocate (this%tign_g(this%ifms:this%ifme, this%jfms:this%jfme))
-      this%tign_g(this%ifps:this%ifpe, this%jfps:this%jfpe) = epsilon (this%tign_g)
-
-      allocate (this%fuel_frac(this%ifms:this%ifme, this%jfms:this%jfme))
-      this%fuel_frac(this%ifds:this%ifde, this%jfds:this%jfde) = 1.0
-
-      allocate (this%fire_area(this%ifms:this%ifme, this%jfms:this%jfme))
-      this%fire_area(this%ifds:this%ifde, this%jfds:this%jfde) = 0.0
-
-      allocate (this%fuel_frac_burnt_dt(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fgrnhfx(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fgrnqfx(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fcanhfx(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fcanqfx(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%ros(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fz0(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fuel_time(this%ifms:this%ifme, this%jfms:this%jfme))
-
-      allocate (this%fire_psfc(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_rain(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_t2(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_q2(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_rh_fire(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_psfc_old(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_rain_old(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_t2_old(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%fire_q2_old(this%ifms:this%ifme, this%jfms:this%jfme))
-
-      this%dt = config_flags%dt
-
-      allocate (this%zsf(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%dzdxf(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%dzdyf(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%nfuel_cat(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%emis_smoke(this%ifms:this%ifme, this%jfms:this%jfme))
-      this%emis_smoke = 0.0
-
-      Ideal_sim2: if (is_ideal_sim) then
-        do j = this%jfds, this%jfde
-          do i = this%ifds, this%ifde
-            this%zsf(i, j) = config_flags%elevation + &
-                             (i - this%ifds) * config_flags%dz_dx * config_flags%dx + &
-                             (j - this%jfds) * config_flags%dz_dy * config_flags%dy
-          end do
-        end do
-        this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dx
-        this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dy
-        this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%fuel_cat
-
-        this%uf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%zonal_wind
-        this%vf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%meridional_wind
-
-        call this%Init_latlons (proj)
-      else
-        this%zsf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%elevations
-        this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dxs
-        this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dys
-        this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%fuel_cats
-
-        this%uf = 0.0
-        this%vf = 0.0
-
-        call this%Init_latlons (proj, srx = geogrid%sr_x, sry = geogrid%sr_y)
-      end if Ideal_sim2
-
-      if (config_flags%fire_is_real_perim .and. .not. is_ideal_sim) then
-        if (allocated (geogrid%lfn_init)) then
-          this%lfn_hist(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%lfn_init
-        else
-          Call Stop_simulation ('Attenting to initialize fire from given  perimeter but no initialization data present')
-        end if
-      end if
-
-      this%unit_fxlat = 2.0 * PI / (360.0 * RERADIUS)  ! earth circumference in m / 360 degrees
-      this%unit_fxlong = cos (this%cen_lat * 2.0 * PI / 360.0) * this%unit_fxlat  ! latitude
-
       call this%Init_tiles (config_flags)
 
       this%nx = this%ifde
@@ -502,6 +371,19 @@
 
           this%dx = dx / sr_x
           this%dy = dy / sr_y
+
+        case (INIT_MODE_IDEAL)
+          this%dx = config_flags%dx
+          this%dy = config_flags%dy
+
+          this%cen_lat = config_flags%cen_lat
+          this%cen_lon = config_flags%cen_lon
+
+          proj = proj_lc_t (cen_lat = this%cen_lat , cen_lon = this%cen_lon, dx = this%dx, dy = this%dy, &
+              standard_lon = config_flags%stand_lon, true_lat_1 = config_flags%true_lat_1, &
+              true_lat_2 = config_flags%true_lat_2, nx = config_flags%nx, ny = config_flags%ny)
+
+          call this%Init_latlons (proj)
 
         case default
           call Stop_simulation ('Not ready to complete fire state initialization 2')
@@ -535,6 +417,21 @@
           if (config_flags%fire_is_real_perim) &
               !this%lfn_hist(this%ifms:this%ifme, this%jfms:this%jfme) = lfn_hist
               call Stop_simulation ('Not ready to initialize from fire perimeter inside WRF')
+
+        case (INIT_MODE_IDEAL)
+          do j = this%jfds, this%jfde
+            do i = this%ifds, this%ifde
+              this%zsf(i, j) = config_flags%elevation + &
+                               (i - this%ifds) * config_flags%dz_dx * config_flags%dx + &
+                               (j - this%jfds) * config_flags%dz_dy * config_flags%dy
+            end do
+          end do
+          this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dx
+          this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dy
+          this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%fuel_cat
+
+          if (config_flags%fire_is_real_perim) &
+              call Stop_simulation ('Not ready to initialize from fire perimeter in idealized mode')
 
         case default
           call Stop_simulation ('Not ready to complete fire state initialization 3')
@@ -917,8 +814,13 @@
       type (namelist_t), intent (in) :: config_flags
 
 
-      this%uf = 0.0
-      this%vf = 0.0
+      if (config_flags%ideal_opt == 1) then
+        this%uf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%zonal_wind
+        this%vf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%meridional_wind
+      else
+        this%uf = 0.0
+        this%vf = 0.0
+      end if
       this%fmc_g = config_flags%fuelmc_g
         ! Init lfn more than the largest domain side
       this%lfn(this%ifds:this%ifde, this%jfds:this%jfde) = 2.0 * &
