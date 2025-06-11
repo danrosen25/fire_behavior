@@ -37,5 +37,3 @@
  fire_upwinding = 9,               ! 0=none, 1=standard, 2=godunov, 3=eno, 4=sethian
 /
 
- &ideal
- /
