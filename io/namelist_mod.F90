@@ -54,6 +54,8 @@
       integer :: fmoist_freq = 0              ! frequency to run moisture model 0: use fmoist_dt, k>0: every k timesteps
       real :: fmoist_dt = 600.0               ! moisture model time step [s]
 
+      integer :: ideal_opt = IDEAL_OPT_DEFAULT  ! 0) real world, 1) ideal
+
         ! Objects
       integer :: fuel_opt = 1 ! Fuel model
       integer :: ros_opt = 0  ! ROS parameterization
@@ -109,7 +111,6 @@
       real :: fire_ignition_radius5 = 0.0
 
         ! Ideal block
-      integer :: ideal_opt = IDEAL_OPT_DEFAULT  ! 0) real world, 1) ideal
       real :: dx = DX_DEFAULT
       real :: dy = DX_DEFAULT
       integer :: nx = NX_DEFAULT
@@ -218,6 +219,8 @@
       real :: fuelmc_g_live = 0.30            ! Fuel moisture content ground (Live FMC). 30% Completely cured, treat as dead fuel
       real :: fuelmc_c = 1.00                 ! Fuel moisture content canopy
 
+      integer :: ideal_opt = IDEAL_OPT_DEFAULT
+
         ! Objects
       integer :: fuel_opt = 1 ! Fuel model
       integer :: ros_opt = 0 ! ROS parameterization
@@ -259,6 +262,7 @@
           fmoist_freq, fmoist_dt, &
           fire_wind_height, fire_is_real_perim, frac_fburnt_to_smoke, fuelmc_g, &
           fuelmc_g_live, fuelmc_c, &
+          ideal_opt, &
             ! objects
           fuel_opt, ros_opt, fmc_opt, emis_opt, &
             ! Ignitions
@@ -316,6 +320,8 @@
       this%fuelmc_g = fuelmc_g
       this%fuelmc_g_live = fuelmc_g_live
       this%fuelmc_c = fuelmc_c
+
+      this%ideal_opt = ideal_opt
 
       this%fuel_opt = fuel_opt
       this%ros_opt = ros_opt
@@ -380,17 +386,16 @@
 
       real :: dx, dy, zonal_wind, meridional_wind, cen_lat, cen_lon, stand_lon, true_lat_1, true_lat_2, &
           dz_dx, dz_dy, elevation
-      integer :: nx, ny, fuel_cat, ideal_opt
+      integer :: nx, ny, fuel_cat
 
       character (len = :), allocatable :: msg
       integer :: unit_nml, io_stat
 
-      namelist /ideal/ ideal_opt, dx, dy, nx, ny, zonal_wind, meridional_wind, fuel_cat, &
+      namelist /ideal/ dx, dy, nx, ny, zonal_wind, meridional_wind, fuel_cat, &
           dz_dx, dz_dy, elevation, cen_lat, cen_lon, stand_lon, true_lat_1, true_lat_2
 
 
         ! Set default values
-      ideal_opt = IDEAL_OPT_DEFAULT
       dx = DX_DEFAULT
       dy = DX_DEFAULT
       nx = NX_DEFAULT
@@ -419,7 +424,6 @@
       if (io_stat /= 0) call Stop_simulation ('Problems reading namelist ideal block')
       close (unit_nml)
 
-      this%ideal_opt = ideal_opt
       this%dx = dx
       this%dy = dy
 
@@ -521,7 +525,7 @@
       call this%Init_time_block (file_name = trim (file_name))
       call this%Init_fire_block (file_name = trim (file_name))
       call this%Init_atm_block (file_name = trim (file_name))
-      call this%Init_ideal_block (file_name = trim (file_name))
+      if (this%ideal_opt > 0) call this%Init_ideal_block (file_name = trim (file_name))
 
       call this%Check_nml ()
 
