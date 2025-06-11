@@ -37,6 +37,9 @@ module fire_behavior_nuopc
   real(ESMF_KIND_R8), pointer     :: ptr_hflx_fire(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_evap_fire(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_smoke_fire(:,:)
+  real(ESMF_KIND_R8), pointer     :: ptr_u10(:,:)
+  real(ESMF_KIND_R8), pointer     :: ptr_v10(:,:)
+
   integer :: clb(2), cub(2), clb3(3), cub3(3)
   logical :: imp_rainrte = .FALSE.
   logical :: imp_rainacc = .FALSE.
@@ -214,6 +217,23 @@ module fire_behavior_nuopc
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
+
+    ! importable field: inst_zonal_wind_height10m
+    call NUOPC_Advertise(importState, &
+      StandardName="inst_zonal_wind_height10m", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    ! importable field: inst_merid_wind_height10m
+    call NUOPC_Advertise(importState, &
+      StandardName="inst_merid_wind_height10m", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
 
 #endif
 
@@ -569,6 +589,44 @@ module fire_behavior_nuopc
        return  ! bail out
      ! Get Field memory
      call ESMF_FieldGet(field, localDe=0, farrayPtr=ptr_lowest_t, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+
+     ! importable field on Grid: inst_zonal_wind_height10m
+     field = ESMF_FieldCreate(name="inst_zonal_wind_height10m", grid=fire_grid, &
+       typekind=ESMF_TYPEKIND_R8, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     call NUOPC_Realize(importState, field=field, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     ! Get Field memory
+     call ESMF_FieldGet(field, localDe=0, farrayPtr=ptr_u10, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+
+     ! importable field on Grid: inst_merid_wind_height10m
+     field = ESMF_FieldCreate(name="inst_merid_wind_height10m", grid=fire_grid, &
+       typekind=ESMF_TYPEKIND_R8, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     call NUOPC_Realize(importState, field=field, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     ! Get Field memory
+     call ESMF_FieldGet(field, localDe=0, farrayPtr=ptr_v10, rc=rc)
      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
        line=__LINE__, &
        file=__FILE__)) &
