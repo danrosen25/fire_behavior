@@ -73,3 +73,13 @@
        alias: inst_temp_height_lowest_from_phys
        canonical_units: K
        description: atmosphere export - bottom layer temperature
+     #
+     - standard_name: Sa_u10m
+       alias: inst_zonal_wind_height10m
+       canonical_units: m s-1
+       description: atmosphere export - zonal wind height 10m
+     #
+     - standard_name: Sa_v10m
+       alias: inst_merid_wind_height10m
+       canonical_units: m s-1
+       description: atmosphere export - meridional wind height 10m
