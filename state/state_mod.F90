@@ -561,14 +561,12 @@
       class (state_fire_t), intent(in out) :: this
       type (namelist_t), intent (in) :: config_flags
 
-      integer :: num_tiles
 
-
-      num_tiles = config_flags%num_tiles
-      call Calc_tiles_dims (this%ifps, this%ifpe, this%jfps, this%jfpe, num_tiles, &
+      this%num_tiles = config_flags%num_tiles
+      call Calc_tiles_dims (this%ifps, this%ifpe, this%jfps, this%jfpe, this%num_tiles, &
           this%i_start, this%i_end, this%j_start, this%j_end)
 
-      if (num_tiles /= config_flags%num_tiles) then
+      if (this%num_tiles /= config_flags%num_tiles) then
         call Stop_simulation ('Not able to use the number of tiles specified')
       end if
 

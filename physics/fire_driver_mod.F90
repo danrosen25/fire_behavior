@@ -106,10 +106,7 @@
           grid%fire_rain_old, grid%fire_t2_old, grid%fire_q2_old, grid%fire_psfc_old, grid%fire_rh_fire, config_flags%fuelmc_g, &
           grid%fmc_g, grid%nfuel_cat, grid%fuels, grid%ros_param)
 
-      do ij = 1, grid%num_tiles
-        call Advance_fire_model (config_flags, grid, &
-            grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij))
-      end do
+      call Advance_fire_model (config_flags, grid)
 
       if (config_flags%fire_print_msg >= PRINT_LEVEL) call Print_summary (config_flags, grid)
 
