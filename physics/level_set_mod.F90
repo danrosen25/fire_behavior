@@ -267,7 +267,7 @@
     end subroutine Calc_fuel_left_at_grid_point
 
     subroutine Prop_level_set (ifds, ifde, jfds, jfde, ifms, ifme, jfms, jfme, &
-        ifts, ifte, jfts, jfte, ts, dt, dx, dy, fire_upwinding, fire_viscosity, &
+        num_tiles, i_start, i_end, j_start, j_end, ts, dt, dx, dy, fire_upwinding, fire_viscosity, &
         fire_viscosity_bg, fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, &
         tbound, lfn_in, lfn_0, lfn_1, lfn_2, lfn_out, tign, ros, uf, vf, dzdxf, dzdyf, ros_model)
 
@@ -275,8 +275,9 @@
 
       implicit none
       
-      integer, intent(in) :: ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
+      integer, intent(in) :: ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, num_tiles, &
           fire_upwinding, fire_viscosity_ngp, fire_lsm_band_ngp
+      integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
       real, intent(in) :: fire_viscosity, fire_viscosity_bg, fire_viscosity_band
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: uf, vf, dzdxf, dzdyf
       real, dimension(ifms:ifme, jfms:jfme), intent (in out) :: lfn_in, tign, lfn_1, lfn_2, lfn_0
@@ -288,59 +289,107 @@
         ! to store tendency (rhs of the level set pde)
       real, dimension(ifms:ifme, jfms:jfme) :: tend
       real :: tbound2, tbound3
-      integer :: i, j
+      integer :: i, j, ij, ifts, ifte, jfts, jfte
       character (len = :), allocatable :: msg
       logical, parameter :: DEBUG_LOCAL = .false.
 
 
       if (DEBUG_LOCAL) call Print_message ('Entering sub Prop_level_set...')
 
-        ! Runge-Kutta step 1
-      do j = jfts, jfte
-        do i = ifts, ifte
-          lfn_0(i, j) = lfn_in(i, j)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+        do j = jfts, jfte
+          do i = ifts, ifte
+            lfn_0(i, j) = lfn_in(i, j)
+          end do
         end do
       end do
 
+        ! Runge-Kutta step 1
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 1...')
-      call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
-          ifms, ifme, jfms, jfme, ts, dt, dx, dy, fire_upwinding, &
-          fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-          fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
 
-      do j = jfts, jfte 
-        do i = ifts, ifte 
-          lfn_1(i, j) = lfn_0(i, j) + (dt / 3.0) * tend(i, j)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
+            ifms, ifme, jfms, jfme, ts, dt, dx, dy, fire_upwinding, &
+            fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+      end do
+
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            lfn_1(i, j) = lfn_0(i, j) + (dt / 3.0) * tend(i, j)
+          end do
         end do
       end do
 
         ! Runge-Kutta step 2
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 2...')
 
-     call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
-         ifms,ifme,jfms,jfme, ts + dt, dt, dx, dy, fire_upwinding, &
-         fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-         fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound2, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
 
-      do j = jfts, jfte
-        do i = ifts, ifte
-          lfn_2(i, j) = lfn_0(i, j) + (dt / 2.0) * tend(i, j)
+        call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
+            ifms,ifme,jfms,jfme, ts + dt, dt, dx, dy, fire_upwinding, &
+            fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound2, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+      end do
+
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            lfn_2(i, j) = lfn_0(i, j) + (dt / 2.0) * tend(i, j)
+          end do
         end do
       end do
 
         ! Runge-Kutta step 3
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 3...')
 
-     call Calc_tend_ls (ifds,ifde,jfds,jfde, ifts, ifte, jfts, jfte, &
-         ifms, ifme, jfms, jfme, ts + dt, dt, dx, dy, fire_upwinding, &
-         fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-         fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound3, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
 
-      do j = jfts, jfte
-        do i = ifts, ifte
-          lfn_out(i, j) = lfn_0(i, j) + dt * tend(i, j)
+        call Calc_tend_ls (ifds,ifde,jfds,jfde, ifts, ifte, jfts, jfte, &
+            ifms, ifme, jfms, jfme, ts + dt, dt, dx, dy, fire_upwinding, &
+            fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound3, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+      end do
+
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+        do j = jfts, jfte
+          do i = ifts, ifte
+            lfn_out(i, j) = lfn_0(i, j) + dt * tend(i, j)
+          end do
         end do
-      end do     
+      end do
 
         ! CFL check, tbound is the max allowed time step
       tbound = min (tbound, tbound2, tbound3)
@@ -356,7 +405,7 @@
 
     end subroutine Prop_level_set
 
-    subroutine Reinit_level_set (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, &
+    subroutine Reinit_level_set (num_tiles, i_start, i_end, j_start, j_end, ifms, ifme, jfms, jfme, &
         ifds, ifde, jfds, jfde, ts, dt, dx, dy, fire_upwinding_reinit, &
         fire_lsm_reinit_iter, fire_lsm_band_ngp, lfn_in, lfn_2, lfn_s0, &
         lfn_s1, lfn_s2, lfn_s3, lfn_out, tign)
@@ -373,7 +422,9 @@
 
       implicit none
 
-      integer, intent (in) :: ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme
+      integer, intent (in) :: num_tiles
+      integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
+      integer, intent (in) :: ifms, ifme, jfms, jfme
       integer, intent (in) :: ifds, ifde, jfds, jfde
       integer, intent (in) :: fire_upwinding_reinit, fire_lsm_reinit_iter, fire_lsm_band_ngp
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_in, tign
@@ -382,62 +433,125 @@
       real, intent (in) :: dx, dy, ts, dt
 
       real :: dt_s, threshold_hlu
-      integer :: nts, i, j
+      integer :: nts, i, j, ij, ifts, ifte, jfts, jfte
 
 
       threshold_hlu = fire_lsm_band_ngp * dx
 
         ! Define S0 based on current lfn values
-      do j = jfts, jfte 
-        do i = ifts, ifte 
-          lfn_s0(i, j) = lfn_out(i,j) / sqrt (lfn_out(i, j) ** 2.0 + dx ** 2.0)
-          lfn_s3(i, j) = lfn_out(i,j)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            lfn_s0(i, j) = lfn_out(i,j) / sqrt (lfn_out(i, j) ** 2.0 + dx ** 2.0)
+            lfn_s3(i, j) = lfn_out(i,j)
+          end do
         end do
       end do
+ 
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
 
-      call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
-          jfds, jfde, ifts, ifte, jfts, jfte, lfn_s3)
+        call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
+            jfds, jfde, ifts, ifte, jfts, jfte, lfn_s3)
+      end do
 
       dt_s = 0.01 * dx
                   dt_s = 0.0001 * dx
 
         ! iterate to solve to steady state reinit PDE
         ! 1 iter each time step is enoguh
-      do nts = 1, fire_lsm_reinit_iter
+      Loop_iter: do nts = 1, fire_lsm_reinit_iter
           ! Runge-Kutta step 1
-        call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
-            ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
-            lfn_s0, lfn_s3, lfn_s3, lfn_s1, 1.0 / 3.0, & ! sign funcition, initial ls, current stage ls, next stage advanced ls, RK coefficient
-            fire_upwinding_reinit)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
 
-        call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
-            jfds, jfde, ifts, ifte, jfts, jfte, lfn_s1)
+          call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
+              ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
+              lfn_s0, lfn_s3, lfn_s3, lfn_s1, 1.0 / 3.0, & ! sign funcition, initial ls, current stage ls, next stage advanced ls, RK coefficient
+              fire_upwinding_reinit)
+        end do
+ 
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
+              jfds, jfde, ifts, ifte, jfts, jfte, lfn_s1)
+        end do
 
           ! Runge-Kutta step 2
-        call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
-            ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
-            lfn_s0, lfn_s3, lfn_s1, lfn_s2, 1.0 / 2.0, &
-            fire_upwinding_reinit)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
 
-        call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
-            jfds, jfde, ifts, ifte, jfts, jfte, lfn_s2)
+          call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
+              ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
+              lfn_s0, lfn_s3, lfn_s1, lfn_s2, 1.0 / 2.0, &
+              fire_upwinding_reinit)
+        end do
+
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
+              jfds, jfde, ifts, ifte, jfts, jfte, lfn_s2)
+        end do
 
           ! Runge-Kutta step 3
-        call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
-            ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
-            lfn_s0, lfn_s3, lfn_s2, lfn_s3, 1.0, &
-            fire_upwinding_reinit) 
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
 
-        call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
-            jfds,jfde,  ifts, ifte, jfts, jfte, lfn_s3)
-      end do
+          call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
+              ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
+              lfn_s0, lfn_s3, lfn_s2, lfn_s3, 1.0, &
+              fire_upwinding_reinit)
+        end do
 
-      do j = jfts, jfte 
-        do i = ifts, ifte 
-            ! assing to lfn_out the reinitialized level-set function
-          lfn_out(i, j) = lfn_s3(i, j)
-            ! fire area can only increase
-          lfn_out(i, j) = min (lfn_out(i, j), lfn_in(i, j))
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
+              jfds,jfde,  ifts, ifte, jfts, jfte, lfn_s3)
+        end do
+      end do Loop_iter
+
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+              ! assing to lfn_out the reinitialized level-set function
+            lfn_out(i, j) = lfn_s3(i, j)
+              ! fire area can only increase
+            lfn_out(i, j) = min (lfn_out(i, j), lfn_in(i, j))
+          end do
         end do
       end do
 
