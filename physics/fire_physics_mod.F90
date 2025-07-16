@@ -89,7 +89,7 @@
 
       select case (config_flags%emis_opt)
         case (EMIS_WRFFIRE)
-          write (*, *) 'Smoke WRF-Fire', config_flags%frac_fburnt_to_smoke
+!          write (*, *) 'Smoke WRF-Fire', config_flags%frac_fburnt_to_smoke
           do j = jfts, jfte
             do i = ifts, ifte
               grid%emis_smoke(i, j) = config_flags%frac_fburnt_to_smoke * grid%fuel_frac_burnt_dt(i, j) * grid%fuel_load_g(i, j) ! kg/m^2
@@ -98,7 +98,7 @@
 
         case (EMIS_FMC_PM2P5)
              ! Assuminmg the fuel is litter for the moment
-          write (*, *) 'Smoke CFBM'
+!          write (*, *) 'Smoke CFBM'
           do j = jfts, jfte
             do i = ifts, ifte
               if (grid%fmc_g(i, j) <= 0.035) then
