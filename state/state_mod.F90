@@ -172,11 +172,17 @@
       integer :: i, j, ij, ifts, ifte, jfts, jfte
 
 
-      do ij = 1, this%num_tiles
-        ifts = this%i_start(ij)
-        ifte = this%i_end(ij)
-        jfts = this%j_start(ij)
-        jfte = this%j_end(ij)
+!tbf
+      do ij = 1, 1
+        ifts = this%ifds
+        ifte = this%ifde
+        jfts = this%jfds
+        jfte = this%jfde
+!      do ij = 1, this%num_tiles
+!        ifts = this%i_start(ij)
+!        ifte = this%i_end(ij)
+!        jfts = this%j_start(ij)
+!        jfte = this%j_end(ij)
 
         do j = jfts, jfte
           do i = ifts, ifte
@@ -456,11 +462,17 @@
       integer :: ij, i, j, ifts, ifte, jfts, jfte, k
 
 
-      do ij = 1, this%num_tiles
-        ifts = this%i_start(ij)
-        ifte = this%i_end(ij)
-        jfts = this%j_start(ij)
-        jfte = this%j_end(ij)
+!tbf
+      do ij = 1, 1
+        ifts = this%ifds
+        ifte = this%ifde
+        jfts = this%jfds
+        jfte = this%jfde
+!      do ij = 1, this%num_tiles
+!        ifts = this%i_start(ij)
+!        ifte = this%i_end(ij)
+!        jfts = this%j_start(ij)
+!        jfte = this%j_end(ij)
         do j = jfts, jfte
           do i = ifts, ifte
             k = int (this%nfuel_cat(i, j))

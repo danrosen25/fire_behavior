@@ -70,17 +70,30 @@
       end select
       call grid%ros_param%Init (grid%ifms, grid%ifme, grid%jfms, grid%jfme)
 
-      do ij = 1, grid%num_tiles
+!tbf
+!      do ij = 1, grid%num_tiles
+!        call Extrapol_var_at_bdys (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%ifds, grid%ifde, &
+!            grid%jfds, grid%jfde, grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij), &
+!            grid%lfn)
+!
+!        call Extrapol_var_at_bdys (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%ifds, grid%ifde, &
+!            grid%jfds, grid%jfde, grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij), &
+!            grid%tign_g)
+!
+!        call grid%ros_param%Set_params (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%i_start(ij), grid%i_end(ij), &
+!            grid%j_start(ij), grid%j_end(ij), grid%fuels, grid%nfuel_cat, grid%fmc_g)
+!      end do
+      do ij = 1, 1
         call Extrapol_var_at_bdys (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%ifds, grid%ifde, &
-            grid%jfds, grid%jfde, grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij), &
+            grid%jfds, grid%jfde, grid%ifds, grid%ifde, grid%jfds, grid%jfde, &
             grid%lfn)
 
         call Extrapol_var_at_bdys (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%ifds, grid%ifde, &
-            grid%jfds, grid%jfde, grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij), &
+            grid%jfds, grid%jfde, grid%ifds, grid%ifde, grid%jfds, grid%jfde, &
             grid%tign_g)
 
-        call grid%ros_param%Set_params (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%i_start(ij), grid%i_end(ij), &
-            grid%j_start(ij), grid%j_end(ij), grid%fuels, grid%nfuel_cat, grid%fmc_g)
+        call grid%ros_param%Set_params (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%ifds, grid%ifde, &
+            grid%jfds, grid%jfde, grid%fuels, grid%nfuel_cat, grid%fmc_g)
       end do
 
     end subroutine Init_fire_components
@@ -106,10 +119,7 @@
           grid%fire_rain_old, grid%fire_t2_old, grid%fire_q2_old, grid%fire_psfc_old, grid%fire_rh_fire, config_flags%fuelmc_g, &
           grid%fmc_g, grid%nfuel_cat, grid%fuels, grid%ros_param)
 
-      do ij = 1, grid%num_tiles
-        call Advance_fire_model (config_flags, grid, &
-            grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij))
-      end do
+      call Advance_fire_model (config_flags, grid)
 
       if (config_flags%fire_print_msg >= PRINT_LEVEL) call Print_summary (config_flags, grid)
 
