@@ -172,17 +172,11 @@
       integer :: i, j, ij, ifts, ifte, jfts, jfte
 
 
-!tbf
-      do ij = 1, 1
-        ifts = this%ifds
-        ifte = this%ifde
-        jfts = this%jfds
-        jfte = this%jfde
-!      do ij = 1, this%num_tiles
-!        ifts = this%i_start(ij)
-!        ifte = this%i_end(ij)
-!        jfts = this%j_start(ij)
-!        jfte = this%j_end(ij)
+      do ij = 1, this%num_tiles
+        ifts = this%i_start(ij)
+        ifte = this%i_end(ij)
+        jfts = this%j_start(ij)
+        jfte = this%j_end(ij)
 
         do j = jfts, jfte
           do i = ifts, ifte
@@ -462,17 +456,11 @@
       integer :: ij, i, j, ifts, ifte, jfts, jfte, k
 
 
-!tbf
-      do ij = 1, 1
-        ifts = this%ifds
-        ifte = this%ifde
-        jfts = this%jfds
-        jfte = this%jfde
-!      do ij = 1, this%num_tiles
-!        ifts = this%i_start(ij)
-!        ifte = this%i_end(ij)
-!        jfts = this%j_start(ij)
-!        jfte = this%j_end(ij)
+      do ij = 1, this%num_tiles
+        ifts = this%i_start(ij)
+        ifte = this%i_end(ij)
+        jfts = this%j_start(ij)
+        jfte = this%j_end(ij)
         do j = jfts, jfte
           do i = ifts, ifte
             k = int (this%nfuel_cat(i, j))
@@ -573,14 +561,12 @@
       class (state_fire_t), intent(in out) :: this
       type (namelist_t), intent (in) :: config_flags
 
-      integer :: num_tiles
 
-
-      num_tiles = config_flags%num_tiles
-      call Calc_tiles_dims (this%ifps, this%ifpe, this%jfps, this%jfpe, num_tiles, &
+      this%num_tiles = config_flags%num_tiles
+      call Calc_tiles_dims (this%ifps, this%ifpe, this%jfps, this%jfpe, this%num_tiles, &
           this%i_start, this%i_end, this%j_start, this%j_end)
 
-      if (num_tiles /= config_flags%num_tiles) then
+      if (this%num_tiles /= config_flags%num_tiles) then
         call Stop_simulation ('Not able to use the number of tiles specified')
       end if
 
