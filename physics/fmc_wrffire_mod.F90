@@ -176,35 +176,19 @@
       end if
 
       if (this%run_advance_moisture) then
-!tbf
-!        do ij = 1, num_tiles
-!          call this%Advance_moisture_classes (itimestep == 1, ifms, ifme, jfms, jfme, i_start(ij), i_end(ij), j_start(ij), j_end(ij), &
-!              fire_rain, fire_t2, fire_q2, fire_psfc, fire_rain_old, fire_t2_old, fire_q2_old, fire_psfc_old, fire_rh_fire, fuelmc_g)
-!        end do
-!
-!        do ij = 1, num_tiles
-!          call this%Average_moisture_classes (ifms, ifme, jfms, jfme, i_start(ij), i_end(ij), j_start(ij), j_end(ij), nfuel_cat, fmc_g)
-!        end do
-!
-!        do ij = 1, num_tiles
-!          call ros_param%Set_params (ifms, ifme, jfms, jfme, i_start(ij), i_end(ij), j_start(ij), j_end(ij), &
-!              fuels, nfuel_cat, fmc_g)
-!        end do
-
-        do ij = 1, 1
-          call this%Advance_moisture_classes (itimestep == 1, ifms, ifme, jfms, jfme, ifms+5, ifme-5, jfms+5, jfme-5, &
+        do ij = 1, num_tiles
+          call this%Advance_moisture_classes (itimestep == 1, ifms, ifme, jfms, jfme, i_start(ij), i_end(ij), j_start(ij), j_end(ij), &
               fire_rain, fire_t2, fire_q2, fire_psfc, fire_rain_old, fire_t2_old, fire_q2_old, fire_psfc_old, fire_rh_fire, fuelmc_g)
         end do
 
-        do ij = 1, 1
-          call this%Average_moisture_classes (ifms, ifme, jfms, jfme, ifms+5, ifme-5, jfms+5, jfme-5, nfuel_cat, fmc_g)
+        do ij = 1, num_tiles
+          call this%Average_moisture_classes (ifms, ifme, jfms, jfme, i_start(ij), i_end(ij), j_start(ij), j_end(ij), nfuel_cat, fmc_g)
         end do
 
-        do ij = 1, 1
-          call ros_param%Set_params (ifms, ifme, jfms, jfme, ifms+5, ifme-5, jfms+5, jfme-5, &
+        do ij = 1, num_tiles
+          call ros_param%Set_params (ifms, ifme, jfms, jfme, i_start(ij), i_end(ij), j_start(ij), j_end(ij), &
               fuels, nfuel_cat, fmc_g)
         end do
-
       end if
 
     end subroutine Advance_fmc_model
