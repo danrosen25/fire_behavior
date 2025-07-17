@@ -68,6 +68,8 @@
           grid%lfn_out, grid%tign_g, grid%ros, grid%uf, grid%vf, grid%dzdxf, grid%dzdyf, grid%ros_param)
 
       if (DEBUG_LOCAL) call Print_message ('calling Stop_if_close_to_bdy...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -76,8 +78,11 @@
 
         call Stop_if_close_to_bdy (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, ifds, jfds, ifde, jfde, grid%lfn_out)
       end do
+      !$OMP END PARALLEL DO
 
       if (DEBUG_LOCAL) call Print_message ('calling Update_ignition_times...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -87,8 +92,12 @@
         call Update_ignition_times (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, ifds, jfds, ifde, jfde, &
             time_start, grid%dt, grid%lfn, grid%lfn_out, grid%tign_g)
       end do
+      !$OMP END PARALLEL DO
+
 
       if (DEBUG_LOCAL) call Print_message ('calling Calc_flame_length...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -98,6 +107,7 @@
         call Calc_flame_length (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, &
             grid%ros, grid%ros_param%iboros, grid%flame_length, grid%ros_front, grid%fire_area)
       end do
+      !$OMP END PARALLEL DO
 
       if (DEBUG_LOCAL) call Print_message ('calling Reinit_level_set...')
       if (config_flags%fire_lsm_reinit) call Reinit_level_set (grid%num_tiles, grid%i_start, grid%i_end, grid%j_start, grid%j_end, &
@@ -107,6 +117,8 @@
            grid%lfn_s1, grid%lfn_s2, grid%lfn_s3, grid%lfn_out, grid%tign_g)
 
       if (DEBUG_LOCAL) call Print_message ('calling Copy_lfnout_to_lfn...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -115,8 +127,11 @@
 
         call Copy_lfnout_to_lfn (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, grid%lfn_out, grid%lfn)
       end do
+      !$OMP END PARALLEL DO
  
       if (DEBUG_LOCAL) call Print_message ('calling Ignite_prescribed_fires...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -125,8 +140,11 @@
 
         call Ignite_prescribed_fires (grid, config_flags, time_start, ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde)
       end do
+      !$OMP END PARALLEL DO
 
       if (DEBUG_LOCAL) call Print_message ('calling Calc_fuel_left...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -136,8 +154,11 @@
             grid%lfn,grid%tign_g,grid%fuel_time, time_start + grid%dt, grid%fuel_frac, grid%fire_area, &
             grid%fuel_frac_burnt_dt)
       end do
+      !$OMP END PARALLEL DO
 
       if (DEBUG_LOCAL) call Print_message ('calling Calc_fire_fluxes...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -146,8 +167,11 @@
         call Calc_fire_fluxes (grid%dt, grid, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
             ifts, ifte, jfts, jfte, grid%fuel_load_g, grid%fuel_frac_burnt_dt, grid%fgrnhfx, grid%fgrnqfx)
       end do
+      !$OMP END PARALLEL DO
 
       if (DEBUG_LOCAL) call Print_message ('calling Calc_smoke_emissions...')
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, grid%num_tiles
         ifts = grid%i_start(ij)
         ifte = grid%i_end(ij)
@@ -156,6 +180,7 @@
 
         call Calc_smoke_emissions (grid, config_flags, ifts, ifte, jfts, jfte)
       end do
+      !$OMP END PARALLEL DO
 
       if (DEBUG_LOCAL) call Print_message ('Leaving Advance_fire_model...')
 

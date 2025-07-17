@@ -172,6 +172,8 @@
       integer :: i, j, ij, ifts, ifte, jfts, jfte
 
 
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
       do ij = 1, this%num_tiles
         ifts = this%i_start(ij)
         ifte = this%i_end(ij)
@@ -184,6 +186,7 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
 
     end subroutine Convert_scottburgan_to_anderson
 
@@ -456,6 +459,8 @@
       integer :: ij, i, j, ifts, ifte, jfts, jfte, k
 
 
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, k, ifts, ifte, jfts, jfte)
       do ij = 1, this%num_tiles
         ifts = this%i_start(ij)
         ifte = this%i_end(ij)
@@ -478,6 +483,7 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
 
     end subroutine Init_fuel_vars
 

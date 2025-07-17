@@ -70,6 +70,8 @@
       end select
       call grid%ros_param%Init (grid%ifms, grid%ifme, grid%jfms, grid%jfme)
 
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij)
       do ij = 1, grid%num_tiles
         call Extrapol_var_at_bdys (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%ifds, grid%ifde, &
             grid%jfds, grid%jfde, grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij), &
@@ -82,6 +84,7 @@
         call grid%ros_param%Set_params (grid%ifms, grid%ifme, grid%jfms, grid%jfme, grid%i_start(ij), grid%i_end(ij), &
             grid%j_start(ij), grid%j_end(ij), grid%fuels, grid%nfuel_cat, grid%fmc_g)
       end do
+      !$OMP END PARALLEL DO
 
     end subroutine Init_fire_components
 

@@ -288,14 +288,16 @@
 
         ! to store tendency (rhs of the level set pde)
       real, dimension(ifms:ifme, jfms:jfme) :: tend
-      real :: tbound2, tbound3
+      real :: tbound2, tbound3, tbound_thread, tbound_min
       integer :: i, j, ij, ifts, ifte, jfts, jfte
-      character (len = :), allocatable :: msg
+      character (len = 128) :: msg
       logical, parameter :: DEBUG_LOCAL = .false.
 
 
       if (DEBUG_LOCAL) call Print_message ('Entering sub Prop_level_set...')
 
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -307,10 +309,14 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
 
         ! Runge-Kutta step 1
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 1...')
 
+      tbound_min = huge(tbound_min)
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread) SHARED(tbound_min)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -320,9 +326,15 @@
         call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
             ifms, ifme, jfms, jfme, ts, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
-      end do
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
 
+        tbound_min = min(tbound_min, tbound_thread)
+      end do
+      !$OMP END PARALLEL DO
+      tbound = tbound_min
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -335,10 +347,14 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
 
         ! Runge-Kutta step 2
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 2...')
 
+      tbound_min = huge(tbound_min)
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread) SHARED(tbound_min)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -348,9 +364,15 @@
         call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
             ifms,ifme,jfms,jfme, ts + dt, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound2, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
-      end do
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
 
+            tbound_min = min(tbound_min, tbound_thread)
+      end do
+      !$OMP END PARALLEL DO
+      tbound2 = tbound_min
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -363,10 +385,14 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
 
         ! Runge-Kutta step 3
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 3...')
 
+      tbound_min = huge(tbound_min)
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread) SHARED(tbound_min)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -376,9 +402,15 @@
         call Calc_tend_ls (ifds,ifde,jfds,jfde, ifts, ifte, jfts, jfte, &
             ifms, ifme, jfms, jfme, ts + dt, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound3, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
-      end do
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
 
+        tbound_min = min(tbound_min, tbound_thread)
+      end do
+      !$OMP END PARALLEL DO
+      tbound3 = tbound_min
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -390,13 +422,14 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
 
         ! CFL check, tbound is the max allowed time step
-      tbound = min (tbound, tbound2, tbound3)
+      tbound = min(min(tbound, tbound2), tbound3)
 
       if (dt > tbound) then
         !$omp critical
-        write (msg, '(2(a, f10.2))') 'CFL violation: time step ', dt, ' > bound =', tbound
+        write (msg, '(a, f10.2, a, f10.2)') 'CFL violation: time step ', dt, ' > bound =', tbound
         call Stop_simulation (msg)
         !$omp end critical
       end if
@@ -439,6 +472,8 @@
       threshold_hlu = fire_lsm_band_ngp * dx
 
         ! Define S0 based on current lfn values
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -452,7 +487,10 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
  
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -462,6 +500,7 @@
         call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
             jfds, jfde, ifts, ifte, jfts, jfte, lfn_s3)
       end do
+      !$OMP END PARALLEL DO
 
       dt_s = 0.01 * dx
                   dt_s = 0.0001 * dx
@@ -470,6 +509,8 @@
         ! 1 iter each time step is enoguh
       Loop_iter: do nts = 1, fire_lsm_reinit_iter
           ! Runge-Kutta step 1
+        !$OMP PARALLEL DO   &
+        !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
@@ -481,7 +522,10 @@
               lfn_s0, lfn_s3, lfn_s3, lfn_s1, 1.0 / 3.0, & ! sign funcition, initial ls, current stage ls, next stage advanced ls, RK coefficient
               fire_upwinding_reinit)
         end do
+        !$OMP END PARALLEL DO
  
+        !$OMP PARALLEL DO   &
+        !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
@@ -491,8 +535,11 @@
           call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
               jfds, jfde, ifts, ifte, jfts, jfte, lfn_s1)
         end do
+        !$OMP END PARALLEL DO
 
           ! Runge-Kutta step 2
+        !$OMP PARALLEL DO   &
+        !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
@@ -504,7 +551,10 @@
               lfn_s0, lfn_s3, lfn_s1, lfn_s2, 1.0 / 2.0, &
               fire_upwinding_reinit)
         end do
+        !$OMP END PARALLEL DO
 
+        !$OMP PARALLEL DO   &
+        !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
@@ -514,8 +564,11 @@
           call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
               jfds, jfde, ifts, ifte, jfts, jfte, lfn_s2)
         end do
+        !$OMP END PARALLEL DO
 
           ! Runge-Kutta step 3
+        !$OMP PARALLEL DO   &
+        !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
@@ -527,7 +580,10 @@
               lfn_s0, lfn_s3, lfn_s2, lfn_s3, 1.0, &
               fire_upwinding_reinit)
         end do
+        !$OMP END PARALLEL DO
 
+        !$OMP PARALLEL DO   &
+        !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
           ifts = i_start(ij)
           ifte = i_end(ij)
@@ -537,8 +593,11 @@
           call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
               jfds,jfde,  ifts, ifte, jfts, jfte, lfn_s3)
         end do
+        !$OMP END PARALLEL DO
       end do Loop_iter
 
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -554,6 +613,7 @@
           end do
         end do
       end do
+      !$OMP END PARALLEL DO
 
     end subroutine Reinit_level_set
 
