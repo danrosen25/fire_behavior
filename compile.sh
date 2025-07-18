@@ -23,6 +23,8 @@ usage () {
   printf "      build NUOPC library and module\n"
   printf "  --esmx, -x\n"
   printf "      build ESMX application (includes NUOPC)\n"
+  printf "  --openmp-on\n"
+  printf "      enable OpenMP parallelization\n"
   printf "  --prefix=INSTALL_PREFIX\n"
   printf "      installation prefix\n"
   printf "  --verbose, -v\n"
@@ -81,6 +83,7 @@ VERBOSE=false
 TEST=false
 TEST_NAME=""
 CLEAN=false
+OPENMP=false
 
 #------------------------------------------------------------------------------
 
@@ -129,6 +132,7 @@ while :; do
     --test=?*|-t=?*) TEST=true; TEST_NAME=${1#*=} ;;
     --test=) TEST=true ;;
     --clean) CLEAN=true ;;
+    --openmp-on) OPENMP=true ;;
     --clean=?*) printf "ERROR: $1 argument ignored.\n"; usage; exit 1 ;;
     --clean=) printf "ERROR: $1 argument ignored.\n"; usage; exit 1 ;;
     -?*) printf "ERROR: Unknown option $1\n"; usage; exit 1 ;;
@@ -212,6 +216,11 @@ if [ "${ESMX}" = true ]; then
   CMAKE_SETTINGS+=("-DESMX=ON")
 else
   CMAKE_SETTINGS+=("-DESMX=OFF")
+fi
+if [ "${OPENMP}" = true ]; then
+  CMAKE_SETTINGS+=("-DENABLE_OPENMP=ON")
+else
+  CMAKE_SETTINGS+=("-DENABLE_OPENMP=OFF")
 fi
 cmake -S${FIRE_DIR} -B${BUILD_DIR} ${CMAKE_SETTINGS[@]}
 if [ "$?" !=  "0" ]; then
