@@ -13,6 +13,7 @@ module fire_behavior_nuopc
   use initialize_mod, only : Init_fire_state
   use advance_mod, only : Advance_state
   use constants_mod, only : G, XLV, CP, FVIRT, R_D
+  use stderrout_mod, only : Stop_simulation
 
   implicit none
 
@@ -37,6 +38,9 @@ module fire_behavior_nuopc
   real(ESMF_KIND_R8), pointer     :: ptr_hflx_fire(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_evap_fire(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_smoke_fire(:,:)
+  real(ESMF_KIND_R8), pointer     :: ptr_u10(:,:)
+  real(ESMF_KIND_R8), pointer     :: ptr_v10(:,:)
+
   integer :: clb(2), cub(2), clb3(3), cub3(3)
   logical :: imp_rainrte = .FALSE.
   logical :: imp_rainacc = .FALSE.
@@ -214,6 +218,23 @@ module fire_behavior_nuopc
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
+
+    ! importable field: inst_zonal_wind_height10m
+    call NUOPC_Advertise(importState, &
+      StandardName="inst_zonal_wind_height10m", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    ! importable field: inst_merid_wind_height10m
+    call NUOPC_Advertise(importState, &
+      StandardName="inst_merid_wind_height10m", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
 
 #endif
 
@@ -574,6 +595,44 @@ module fire_behavior_nuopc
        file=__FILE__)) &
        return  ! bail out
 
+     ! importable field on Grid: inst_zonal_wind_height10m
+     field = ESMF_FieldCreate(name="inst_zonal_wind_height10m", grid=fire_grid, &
+       typekind=ESMF_TYPEKIND_R8, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     call NUOPC_Realize(importState, field=field, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     ! Get Field memory
+     call ESMF_FieldGet(field, localDe=0, farrayPtr=ptr_u10, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+
+     ! importable field on Grid: inst_merid_wind_height10m
+     field = ESMF_FieldCreate(name="inst_merid_wind_height10m", grid=fire_grid, &
+       typekind=ESMF_TYPEKIND_R8, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     call NUOPC_Realize(importState, field=field, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+     ! Get Field memory
+     call ESMF_FieldGet(field, localDe=0, farrayPtr=ptr_v10, rc=rc)
+     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return  ! bail out
+
 #endif
 
 ! #ifdef WITHEXPORTFIELDS
@@ -763,24 +822,36 @@ module fire_behavior_nuopc
 
 #endif
 
-    do j = 1, grid%jfde
-      do i = 1, grid%ifde
-        call grid%Interpolate_profile (config_flags,  & ! for debug output, <= 0 no output
-            config_flags%fire_wind_height,           & ! interpolation height
-            grid%kfds, grid%kfde,                    & ! fire grid dimensions
-            atm_u3d(i,j,:),atm_v3d(i,j,:),           & ! atm grid arrays in
-            atm_ph(i,j,:),                           &
-            grid%uf(i,j),grid%vf(i,j),grid%fz0(i,j))
+    select case (config_flags%wind_vinterp_opt)
+      case (0)
+        do j = 1, grid%jfde
+          do i = 1, grid%ifde
+            call grid%Interpolate_profile (config_flags,  & ! for debug output, <= 0 no output
+                config_flags%fire_wind_height,           & ! interpolation height
+                grid%kfds, grid%kfde,                    & ! fire grid dimensions
+                atm_u3d(i,j,:),atm_v3d(i,j,:),           & ! atm grid arrays in
+                atm_ph(i,j,:),                           &
+                grid%uf(i,j),grid%vf(i,j),grid%fz0(i,j))
 
-        ! avoid arithmatic error
-        wspd = (grid%uf(i,j) ** 2. + grid%vf(i,j) ** 2.) ** .5
-        if (wspd < 0.001) then
-          grid%uf(i,j) = sign(0.001, grid%uf(i,j))
-          grid%vf(i,j) = sign(0.001, grid%vf(i,j))
-        endif
+            ! avoid arithmatic error
+            wspd = (grid%uf(i,j) ** 2. + grid%vf(i,j) ** 2.) ** .5
+            if (wspd < 0.001) then
+              grid%uf(i,j) = sign(0.001, grid%uf(i,j))
+              grid%vf(i,j) = sign(0.001, grid%vf(i,j))
+            endif
 
-      enddo
-    enddo
+          enddo
+        enddo
+      case (1)
+        do j = 1, grid%jfde
+          do i = 1, grid%ifde
+            grid%uf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_u10(i,j) 
+            grid%vf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_v10(i,j)
+          end do
+        end do
+      case default
+        call Stop_simulation ('Error: wrong wind_vinterp_opt')
+    end select
 
     if (grid%datetime_now == grid%datetime_start) call grid%Save_state ()
 

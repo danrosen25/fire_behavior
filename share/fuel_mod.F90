@@ -3,7 +3,7 @@
     implicit none
 
     private
-    
+
     public :: fuel_t, FUEL_ANDERSON, Crosswalk_from_scottburgan_to_anderson
 
     integer, parameter :: FUEL_ANDERSON = 1, UNKNOWN_FUEL_CAT = 0
@@ -36,12 +36,15 @@
       real, dimension(:), allocatable :: fuelmce
         ! fuel loading 1-h, 10-h, 100-h, 1000-h, and live  [ton/acre]
       real, dimension(:), allocatable :: fgi_1h, fgi_10h, fgi_100h, fgi_1000h, fgi_live
+        ! wind adjustment factor
+      real, dimension(:), allocatable :: waf
     contains
       procedure (Initialization), deferred :: Initialization
+      procedure, public :: Calc_wind_adjustment_factor => Calc_wind_adjustment_factor
     end type fuel_t
 
     abstract interface
-      subroutine Initialization (this, fuelmc_c) 
+      subroutine Initialization (this, fuelmc_c)
         import :: fuel_t
         class (fuel_t), intent (in out) :: this
         real, intent(in) :: fuelmc_c
@@ -123,5 +126,33 @@
         end select
 
     end function Crosswalk_from_scottburgan_to_anderson
+
+    subroutine Calc_wind_adjustment_factor (this)
+
+      implicit none
+
+      class (fuel_t), intent (in out) :: this
+
+      ! local
+      integer :: i
+      real :: wh, flamelength, h
+      real :: HF ! extent of the flame above the vegetation
+
+
+      allocate (this%waf(this%n_fuel_cat))
+      wh = 10.0 ! input wind height in meter
+
+      do i = 1,this%n_fuel_cat
+        h = this%fueldepthm(i)
+        flamelength = 2.0 * h ! assume flamelength is double the fuel bed height
+        if (flamelength > h) then
+          hf = max(flamelength - h, 0.13 * h)
+          this%waf(i) = (1.0 + 0.36 * h / hf) / log(((wh-h) + 0.36 * h) / (0.13 * h)) * (log( (hf/h + 0.36)/0.13) - 1.0)
+        else
+          this%waf(i) = 0.15
+        endif
+      end do
+
+    end subroutine Calc_wind_adjustment_factor
 
   end module fuel_mod

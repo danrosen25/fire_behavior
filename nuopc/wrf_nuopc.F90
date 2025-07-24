@@ -161,6 +161,22 @@ module wrf_nuopc
 !      return  ! bail out
 
     ! 2D
+    ! exportable field: inst_zonal_wind_levels
+    call NUOPC_Advertise(exportState, &
+      StandardName="inst_zonal_wind_height10m", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    ! exportable field: inst_merid_wind_levels
+    call NUOPC_Advertise(exportState, &
+      StandardName="inst_merid_wind_height10m", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
     ! exportable field: inst_surface_roughness
     call NUOPC_Advertise(exportState, &
       StandardName="inst_surface_roughness", rc=rc)
@@ -293,7 +309,7 @@ module wrf_nuopc
       rc=rc)
     if(ESMF_STDERRORCHECK(rc)) return
 
-    grid = ESMF_GridCreate(name='ATM', & 
+    grid = ESMF_GridCreate(name='ATM', &
       distgrid=distgrid, coordSys = ESMF_COORDSYS_SPH_DEG, &
       rc = rc)
     if(ESMF_STDERRORCHECK(rc)) return
@@ -617,6 +633,31 @@ module wrf_nuopc
       file=__FILE__)) &
       return  ! bail out
 
+    ! exportable field on Grid: inst_zonal_wind_height10m
+    field = ESMF_FieldCreate(name="inst_zonal_wind_height10m", grid=grid, &
+      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call NUOPC_Realize(exportState, field=field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    ! exportable field on Grid: inst_merid_wind_height10m
+    field = ESMF_FieldCreate(name="inst_merid_wind_height10m", grid=grid, &
+      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call NUOPC_Realize(exportState, field=field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
 
     datetime_now = datetime_t (config_flags%start_year, config_flags%start_month, &
       config_flags%start_day, config_flags%start_hour, config_flags%start_minute, &
@@ -759,7 +800,7 @@ module wrf_nuopc
   end subroutine
 
   subroutine Update_atm_state (datetime)
-   
+
     type (datetime_t), intent (in) :: datetime
 
 
@@ -773,7 +814,7 @@ module wrf_nuopc
     call state%Get_phl(datetime)
 !    call state%Get_pres(datetime)
 
-    ! convert m to cm 
+    ! convert m to cm
     ptr_z0(clb(1):cub(1),clb(2):cub(2))= &
       state%z0(1:size(state%lats, dim=1),1:size(state%lats, dim=2)) * 100.0
     ptr_q2(clb(1):cub(1),clb(2):cub(2))= &
@@ -793,7 +834,7 @@ module wrf_nuopc
       state%phl(1:size(state%lats, dim=1),1:size(state%lats, dim=2), 1:state%kde - 1)
 !    ptr_pres(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))= &
 !      state%pres(1:size(state%lats, dim=1),1:size(state%lats, dim=2), 1:state%kde - 1)
-   
+
   end subroutine
 
 end module wrf_nuopc

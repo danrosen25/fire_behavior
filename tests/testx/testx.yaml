@@ -60,3 +60,5 @@ ATMD:
     inst_pres_height_lowest_from_phys:        {dim: 2, val: 85000}
     inst_spec_humid_height_lowest_from_phys:  {dim: 2, val: 0.005}
     inst_temp_height_lowest_from_phys:        {dim: 2, val: 310}
+    inst_zonal_wind_height10m:                {dim: 2, val: 1}
+    inst_merid_wind_height10m:                {dim: 2, val: 3}

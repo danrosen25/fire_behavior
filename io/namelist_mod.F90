@@ -42,6 +42,7 @@
                                               ! for fire_upwinding_reinit=4,5 and fire_upwinding=8,9 options"
 
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
+      integer :: wind_vinterp_opt = 0         ! "wind (adjustment factor) interpolation option"
       logical :: fire_lsm_zcoupling = .false. ! "flag to activate reference velocity at a different height from fire_wind_height"
       real :: fire_lsm_zcoupling_ref = 50.0   ! "reference height from wich u at fire_wind_hegiht is calculated using a logarithmic profile" "m"
 
@@ -213,6 +214,7 @@
       integer :: fmoist_freq = 0              ! "frequency to run moisture model 0: use fmoist_dt, k>0: every k timesteps" "1"
       real :: fmoist_dt = 600                 ! "moisture model time step" "s"
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
+      integer :: wind_vinterp_opt = 0         ! "wind (adjustment factor) interpolation option"
       logical :: fire_is_real_perim = .false. ! .false. = point/line ignition, .true. = observed perimeter"
       real :: frac_fburnt_to_smoke = 0.02     ! "parts per unit of burned fuel becoming smoke " "g_smoke/kg_air"
       real :: fuelmc_g = 0.08                 ! Fuel moisture content ground (Dead FMC)
@@ -265,6 +267,7 @@
           ideal_opt, &
             ! objects
           fuel_opt, ros_opt, fmc_opt, emis_opt, &
+          wind_vinterp_opt, &
             ! Ignitions
           fire_num_ignitions, &
             ! Ignition 1
@@ -327,6 +330,7 @@
       this%ros_opt = ros_opt
       this%fmc_opt = fmc_opt
       this%emis_opt = emis_opt
+      this%wind_vinterp_opt = wind_vinterp_opt
 
       this%fire_num_ignitions = fire_num_ignitions
 

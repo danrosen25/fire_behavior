@@ -117,6 +117,9 @@
         end if
       end do
 
+      ! Initialize wind adjustment factor
+      call this%Calc_wind_adjustment_factor()
+
     end subroutine Init_anderson_fuel_model
 
   end module fuel_anderson_mod
