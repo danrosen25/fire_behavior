@@ -218,9 +218,9 @@ else
   CMAKE_SETTINGS+=("-DESMX=OFF")
 fi
 if [ "${OPENMP}" = true ]; then
-  CMAKE_SETTINGS+=("-DENABLE_OPENMP=ON")
+  CMAKE_SETTINGS+=("-DOPENMP=ON")
 else
-  CMAKE_SETTINGS+=("-DENABLE_OPENMP=OFF")
+  CMAKE_SETTINGS+=("-DOPENMP=OFF")
 fi
 cmake -S${FIRE_DIR} -B${BUILD_DIR} ${CMAKE_SETTINGS[@]}
 if [ "$?" !=  "0" ]; then

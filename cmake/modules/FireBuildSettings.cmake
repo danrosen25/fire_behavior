@@ -14,12 +14,12 @@ function(set_fire_cache)
   set (DM_PARALLEL ${DM_PARALLEL} CACHE BOOL "Turn on MPI build" FORCE)
   set (NUOPC ${NUOPC} CACHE BOOL "Build NUOPC cap" FORCE)
   set (ESMX ${ESMX} CACHE BOOL "Build ESMX application" FORCE)
-  set (ENABLE_OPENMP ${ENABLE_OPENMP} CACHE BOOL "Enable OpenMP parallelization" FORCE)
+  set (OPENMP ${OPENMP} CACHE BOOL "Enable OpenMP parallelization" FORCE)
 endfunction()
 
 function(print_fire_settings)
   message (STATUS "FIRE BEHAVIOR BUILD SETTINGS\n"
-                  "\tOPENMP: ${ENABLE_OPENMP}\n"
+                  "\tOPENMP: ${OPENMP}\n"
                   "\tDM_PARALLEL: ${DM_PARALLEL}\n"
                   "\tNUOPC: ${NUOPC}\n"
 		  "\tESMX:  ${ESMX}")
