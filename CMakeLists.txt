@@ -49,6 +49,11 @@ if(DM_PARALLEL)
   add_compile_definitions(firelib PUBLIC DM_PARALLEL=1)
 endif()
 
+if(OPENMP)
+  find_package(OpenMP REQUIRED)
+  message(STATUS "OpenMP enabled")
+endif()
+
 #------------------------------------------------------------------------------
 # Add source files
 
@@ -102,6 +107,9 @@ else()
 endif()
 if (DM_PARALLEL)
   target_link_libraries(firelib PUBLIC $<BUILD_INTERFACE:MPI::MPI_Fortran>)
+endif()
+if(OPENMP)
+  target_link_libraries(firelib PUBLIC $<BUILD_INTERFACE:OpenMP::OpenMP_Fortran>)
 endif()
 set_target_properties( 
                       firelib
