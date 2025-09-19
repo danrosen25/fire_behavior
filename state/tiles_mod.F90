@@ -1,20 +1,24 @@
   module tiles_mod
 
+    use stderrout_mod, only : Stop_simulation
+
     implicit none
 
     private
+
+    integer, parameter :: TILE_NONE = 0, TILE_X = 1, TILE_Y = 2, TILE_XY = 3
 
     public :: Calc_tiles_dims
 
   contains
 
-    subroutine Calc_tiles_dims (spx, epx, spy, epy, num_tiles, i_start, i_end, j_start, j_end)
+    subroutine Calc_tiles_dims (spx, epx, spy, epy, num_tiles, tile_strategy, i_start, i_end, j_start, j_end)
 
       ! This code is borrowed from module_tiles.F in WRF, specifically SUBROUTINE set_tiles2
 
       implicit none
 
-      integer, intent (in) :: spx, epx, spy, epy
+      integer, intent (in) :: spx, epx, spy, epy, tile_strategy
       integer, intent (in out) :: num_tiles
 
       integer, parameter :: MIN_TILES_IN_X = 1, MIN_TILES_IN_Y = 1
@@ -37,7 +41,23 @@
       allocate (j_end(num_tiles))
 
         ! Calc number of tiles in x and y based on total number of tiles
-      call least_aspect (num_tiles, MIN_TILES_IN_Y, MIN_TILES_IN_X, num_tiles_y, num_tiles_x)
+      select case (tile_strategy)
+        case (TILE_NONE, TILE_Y)
+          if (num_tiles > (epy - spy + 1)) call Stop_simulation ('Number of tiles is too high for TILE_Y strategy')
+          num_tiles_x = 1
+          num_tiles_y = num_tiles
+
+        case (TILE_X)
+          num_tiles_x = num_tiles
+          num_tiles_y = 1
+
+        case (TILE_XY)
+          call least_aspect (num_tiles, MIN_TILES_IN_Y, MIN_TILES_IN_X, num_tiles_y, num_tiles_x)
+
+        case default
+          call Stop_simulation ('The tile strategy selected is not valid.')
+
+      end select
 
         ! Calc start and end tile indices
       nt = 1

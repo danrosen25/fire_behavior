@@ -23,6 +23,7 @@
       real :: dt = 2.0
 
       integer :: num_tiles = 1
+      integer :: tile_strategy = 0
 
       integer :: fire_print_msg = 0           ! "write fire statistics, 0 no writes, 1+ for more"  ""
       real :: fire_atm_feedback = 1.0         ! "the heat fluxes to the atmosphere are multiplied by this" "1"
@@ -458,7 +459,7 @@
 
       integer :: start_year, start_month, start_day, start_hour, start_minute, start_second, &
           end_year, end_month, end_day, end_hour, end_minute, end_second, interval_output, &
-          num_tiles
+          num_tiles, tile_strategy
       real :: dt
 
       character (len = :), allocatable :: msg
@@ -484,6 +485,7 @@
       dt = 2.0
       interval_output = 0
       num_tiles = 1
+      tile_strategy = 0
 
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
@@ -511,6 +513,7 @@
       this%interval_output = interval_output
 
       this%num_tiles = num_tiles
+      this%tile_strategy = tile_strategy
 
     end subroutine Init_time_block
 

@@ -101,9 +101,11 @@
       procedure, public :: Init_ignition_lines => Init_ignition_lines
       procedure :: Init_latlons => Init_latlons
       procedure :: Init_tiles => Init_tiles
+      procedure :: Init_tiles_in_wrf => Init_tiles_in_wrf
       procedure :: Interpolate_vars_atm_to_fire => Interpolate_vars_atm_to_fire
       procedure, public :: Interpolate_profile => Interpolate_profile
       procedure, public :: Print => Print_domain ! private
+      procedure, public :: Print_tiles => Print_tiles
       procedure, public :: Save_state => Save_state
       procedure, public :: Set_vars_to_default => Set_vars_to_default
       procedure, public :: Set_time_stamps => Set_time_stamps
@@ -313,6 +315,8 @@
           this%kfts = config_flags%kds
           this%kfte = config_flags%kde
 
+          call this%Init_tiles (config_flags)
+
         case (INIT_MODE_WRF)
           this%ifds = ifds
           this%ifde = ifde
@@ -337,13 +341,15 @@
           this%kfts = kfts
           this%kfte = kfte
 
+          call this%Init_tiles_in_wrf (config_flags, sr_x, sr_y)
+
         case default
 
           call Stop_simulation ('Not ready to complete fire state initialization 1')
 
       end select Set_dims
 
-      call this%Init_tiles (config_flags)
+      call this%Print_tiles ()
 
       this%nx = this%ifde
       this%ny = this%jfde
@@ -569,7 +575,7 @@
 
 
       this%num_tiles = config_flags%num_tiles
-      call Calc_tiles_dims (this%ifps, this%ifpe, this%jfps, this%jfpe, this%num_tiles, &
+      call Calc_tiles_dims (this%ifps, this%ifpe, this%jfps, this%jfpe, this%num_tiles, config_flags%tile_strategy, &
           this%i_start, this%i_end, this%j_start, this%j_end)
 
       if (this%num_tiles /= config_flags%num_tiles) then
@@ -577,6 +583,38 @@
       end if
 
     end subroutine Init_tiles
+
+    subroutine Init_tiles_in_wrf (this, config_flags, sr_x, sr_y)
+
+      implicit none
+
+      class (state_fire_t), intent(in out) :: this
+      type (namelist_t), intent (in) :: config_flags
+      integer, intent (in) :: sr_x, sr_y
+
+      integer :: ips, ipe, jps, jpe, ij
+
+
+      this%num_tiles = config_flags%num_tiles
+      ips = (this%ifps - 1) / sr_x + 1
+      ipe = this%ifpe / sr_x
+      jps = (this%jfps - 1) / sr_y + 1
+      jpe = this%jfpe / sr_y
+      call Calc_tiles_dims (ips, ipe, jps, jpe, this%num_tiles, config_flags%tile_strategy, &
+          this%i_start, this%i_end, this%j_start, this%j_end)
+
+      if (this%num_tiles /= config_flags%num_tiles) then
+        call Stop_simulation ('Not able to use the number of tiles specified')
+      end if
+
+      do ij = 1, this%num_tiles
+        this%i_start(ij) = this%i_start(ij) * sr_x - sr_x + 1
+        this%i_end(ij) = this%i_end(ij) * sr_x
+        this%j_start(ij) = this%j_start(ij) * sr_y - sr_y + 1
+        this%j_end(ij) = this%j_end(ij) * sr_y
+      end do
+
+    end subroutine Init_tiles_in_wrf
 
     subroutine Interpolate_vars_atm_to_fire (this, wrf, config_flags)
 
@@ -750,6 +788,24 @@
       write (OUTPUT_UNIT, *) ''
 
     end subroutine Print_domain
+
+    subroutine Print_tiles (this)
+
+      implicit none
+
+      class (state_fire_t), intent(in) :: this
+
+      integer :: ij
+      character (len = 300) :: msg
+
+
+      do ij = 1, this%num_tiles
+        write (msg, '(a10, 1x, i3, a4, i7, a4, i7, a4, i7, a4, i7)') &
+            'CFBM TILE', ij, ' IS', this%i_start(ij), ' IE', this%i_end(ij), ' JS', this%j_start(ij), ' JE', this%j_end(ij)
+        call Print_message (trim (msg))
+      end do
+
+    end subroutine Print_tiles
 
     subroutine Save_state (this)
 
