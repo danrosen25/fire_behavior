@@ -94,7 +94,7 @@
       real, parameter :: MASS_EXT_COEF = 4.5, RH_CRIT = 0.3, RH_MAX = 0.95, CONVERT_PERCENT_TO_UNITLESS = 0.01
       real :: rh, augm_ext_coef
       integer :: i, k, j
-      logical, parameter :: DEBUG_LOCAL = .true.
+      logical, parameter :: DEBUG_LOCAL = .false.
 
 
       Loop_j_aod : do j = jts, min (jte, jde - 1)
@@ -911,6 +911,7 @@
         integer, intent (in) :: its, ite, jts, jte, ifts, ifte, jfts, jfte, sr_x, sr_y
 
         integer :: isz1, jsz1, isz2, jsz2, ir, jr
+        logical, parameter :: DEBUG_LOCAL = .false.
 
 
         isz1 = ite - its + 1
@@ -920,10 +921,10 @@
         ir = isz2 / isz1
         jr = jsz2 / jsz1
 
-        write (OUTPUT_UNIT, *) 'its, ite, jts, jte =', its, ite, jts, jte
-        write (OUTPUT_UNIT, *) 'ifts, ifte, jfts, jfte =', ifts, ifte, jfts, jfte 
-        write (OUTPUT_UNIT, *) 'isz1, jsz1, isz2, jsz2 =', isz1, jsz1, isz2, jsz2
-        write (OUTPUT_UNIT, *) 'ir, jz =', ir, jr
+        if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) 'its, ite, jts, jte =', its, ite, jts, jte
+        if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) 'ifts, ifte, jfts, jfte =', ifts, ifte, jfts, jfte 
+        if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) 'isz1, jsz1, isz2, jsz2 =', isz1, jsz1, isz2, jsz2
+        if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) 'ir, jz =', ir, jr
 
         if (ir /= sr_x .or. jr /= sr_y) call Stop_simulation ('Tile dims do not preserve fire/atm ratio')
 
@@ -991,9 +992,9 @@
       real, dimension( its:ite,kts:kte,jts:jte ) :: hfx,qfx
 
 
-      write (OUTPUT_UNIT, *) 'pajm: its, ite, jts, jte, kts, kte = ', its, ite, jts, jte, kts, kte
-      write (OUTPUT_UNIT, *) 'pajm: ids, ide, jds, jde, kds, kde = ', ids, ide, jds, jde, kds, kde
-      write (OUTPUT_UNIT, *) 'pajm: alfg,alfc,z1can = ', alfg,alfc,z1can
+!      write (OUTPUT_UNIT, *) 'pajm: its, ite, jts, jte, kts, kte = ', its, ite, jts, jte, kts, kte
+!      write (OUTPUT_UNIT, *) 'pajm: ids, ide, jds, jde, kds, kde = ', ids, ide, jds, jde, kds, kde
+!      write (OUTPUT_UNIT, *) 'pajm: alfg,alfc,z1can = ', alfg,alfc,z1can
 
       do j=jts,jte
         do k=kts,min(kte+1,kde)
