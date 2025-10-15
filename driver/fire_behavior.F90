@@ -12,7 +12,7 @@
 
     implicit none
 
-    integer :: ierr
+    integer :: ierr, rank
     type (state_fire_t) :: grid
     type (wrf_t) :: atm_state
     type (namelist_t) :: config_flags
@@ -27,7 +27,21 @@
 #endif
 
       ! Read namelist
-    call config_flags%Initialization (file_name = 'namelist.fire')
+#ifdef DM_PARALLEL
+    call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+    if (ierr /= MPI_SUCCESS) then
+      write (ERROR_UNIT, *) 'ERROR: mpi_comm_rank failed'
+      stop
+    end if
+#else
+    rank = 0
+#endif
+
+    if (rank == 0) call config_flags%Initialization (file_name = 'namelist.fire')
+
+#ifdef DM_PARALLEL
+    call config_flags%Broadcast_nml ()
+#endif
 
     select case (config_flags%ideal_opt)
       case (0)

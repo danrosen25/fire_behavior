@@ -1,5 +1,8 @@
   module namelist_mod
 
+#ifdef DM_PARALLEL
+    use mpi_f08
+#endif
     use stderrout_mod, only : Stop_simulation, Print_message
 
     implicit none
@@ -134,6 +137,7 @@
         ! Atmosphere
       integer :: kds = 1, kde = 1
     contains
+      procedure, public :: Broadcast_nml => Broadcast_nml
       procedure, public :: Check_nml => Check_nml
       procedure, public :: Initialization => Init_namelist
       procedure, public :: Init_fire_block => Init_fire_block
@@ -143,6 +147,189 @@
     end type namelist_t
 
   contains
+
+    subroutine Broadcast_nml (this)
+
+      implicit none
+
+      class (namelist_t), intent (in out) :: this
+
+
+#ifdef DM_PARALLEL
+
+        ! Fire block
+      call Broadcast_integer (this%fire_print_msg)
+      call Broadcast_real (this%fire_atm_feedback)
+      call Broadcast_integer (this%fire_upwinding)
+      call Broadcast_real (this%fire_viscosity)
+      call Broadcast_logical (this%fire_lsm_reinit)
+      call Broadcast_integer (this%fire_lsm_reinit_iter)
+      call Broadcast_integer (this%fire_upwinding_reinit)
+      call Broadcast_integer (this%fire_lsm_band_ngp)
+      call Broadcast_logical (this%fire_lsm_zcoupling)
+      call Broadcast_real (this%fire_lsm_zcoupling_ref)
+      call Broadcast_real (this%fire_viscosity_bg)
+      call Broadcast_real (this%fire_viscosity_band)
+      call Broadcast_integer (this%fire_viscosity_ngp)
+      call Broadcast_logical (this%fmoist_run)
+      call Broadcast_integer (this%fmoist_freq)
+      call Broadcast_real (this%fmoist_dt)
+      call Broadcast_real (this%fire_wind_height)
+      call Broadcast_logical (this%fire_is_real_perim)
+      call Broadcast_real (this%frac_fburnt_to_smoke)
+      call Broadcast_real (this%fuelmc_g)
+      call Broadcast_real (this%fuelmc_g_live)
+      call Broadcast_real (this%fuelmc_c)
+
+      call Broadcast_integer (this%ideal_opt)
+      call Broadcast_integer (this%fuel_opt)
+      call Broadcast_integer (this%ros_opt)
+      call Broadcast_integer (this%emis_opt)
+      call Broadcast_integer (this%wind_vinterp_opt)
+
+      call Broadcast_integer (this%fire_num_ignitions)
+
+      call Broadcast_real (this%fire_ignition_start_lon1)
+      call Broadcast_real (this%fire_ignition_start_lat1)
+      call Broadcast_real (this%fire_ignition_end_lon1)
+      call Broadcast_real (this%fire_ignition_end_lat1)
+      call Broadcast_real (this%fire_ignition_ros1)
+      call Broadcast_real (this%fire_ignition_start_time1)
+      call Broadcast_real (this%fire_ignition_end_time1)
+      call Broadcast_real (this%fire_ignition_radius1)
+
+      call Broadcast_real (this%fire_ignition_start_lon2)
+      call Broadcast_real (this%fire_ignition_start_lat2)
+      call Broadcast_real (this%fire_ignition_end_lon2)
+      call Broadcast_real (this%fire_ignition_end_lat2)
+      call Broadcast_real (this%fire_ignition_ros2)
+      call Broadcast_real (this%fire_ignition_start_time2)
+      call Broadcast_real (this%fire_ignition_end_time2)
+      call Broadcast_real (this%fire_ignition_radius2)
+
+      call Broadcast_real (this%fire_ignition_start_lon3)
+      call Broadcast_real (this%fire_ignition_start_lat3)
+      call Broadcast_real (this%fire_ignition_end_lon3)
+      call Broadcast_real (this%fire_ignition_end_lat3)
+      call Broadcast_real (this%fire_ignition_ros3)
+      call Broadcast_real (this%fire_ignition_start_time3)
+      call Broadcast_real (this%fire_ignition_end_time3)
+      call Broadcast_real (this%fire_ignition_radius3)
+
+      call Broadcast_real (this%fire_ignition_start_lon4)
+      call Broadcast_real (this%fire_ignition_start_lat4)
+      call Broadcast_real (this%fire_ignition_end_lon4)
+      call Broadcast_real (this%fire_ignition_end_lat4)
+      call Broadcast_real (this%fire_ignition_ros4)
+      call Broadcast_real (this%fire_ignition_start_time4)
+      call Broadcast_real (this%fire_ignition_end_time4)
+      call Broadcast_real (this%fire_ignition_radius4)
+
+      call Broadcast_real (this%fire_ignition_start_lon5)
+      call Broadcast_real (this%fire_ignition_start_lat5)
+      call Broadcast_real (this%fire_ignition_end_lon5)
+      call Broadcast_real (this%fire_ignition_end_lat5)
+      call Broadcast_real (this%fire_ignition_ros5)
+      call Broadcast_real (this%fire_ignition_start_time5)
+      call Broadcast_real (this%fire_ignition_end_time5)
+      call Broadcast_real (this%fire_ignition_radius5)
+
+        ! Ideal block
+      call Broadcast_real (this%dx)
+      call Broadcast_real (this%dy)
+
+      call Broadcast_integer (this%nx)
+      call Broadcast_integer (this%ny)
+
+      call Broadcast_real (this%zonal_wind)
+      call Broadcast_real (this%meridional_wind)
+      call Broadcast_integer (this%fuel_cat)
+      call Broadcast_real (this%dz_dx)
+      call Broadcast_real (this%dz_dy)
+      call Broadcast_real (this%elevation)
+
+      call Broadcast_real (this%cen_lat)
+      call Broadcast_real (this%cen_lon)
+      call Broadcast_real (this%stand_lon)
+      call Broadcast_real (this%true_lat_1)
+      call Broadcast_real (this%true_lat_2)
+
+        ! time block
+      call Broadcast_integer (this%start_year)
+      call Broadcast_integer (this%start_month)
+      call Broadcast_integer (this%start_day)
+      call Broadcast_integer (this%start_hour)
+      call Broadcast_integer (this%start_minute)
+      call Broadcast_integer (this%start_second)
+      call Broadcast_integer (this%end_year)
+      call Broadcast_integer (this%end_month)
+      call Broadcast_integer (this%end_day)
+      call Broadcast_integer (this%end_hour)
+      call Broadcast_integer (this%end_minute)
+      call Broadcast_integer (this%end_second)
+      call Broadcast_real (this%dt)
+      call Broadcast_integer (this%interval_output)
+
+      call Broadcast_integer (this%num_tiles)
+      call Broadcast_integer (this%tile_strategy)
+
+        ! Atm block
+      call Broadcast_integer (this%interval_atm)
+      call Broadcast_integer (this%kde)
+
+    contains
+
+      subroutine Broadcast_integer (val)
+
+        implicit none
+
+        integer, intent(in) :: val
+
+        integer :: ierr
+
+
+        call Mpi_bcast(val, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+        if (ierr /= MPI_SUCCESS) &
+            call Stop_simulation ('Error broadcasting integer value')
+
+      end subroutine Broadcast_integer
+
+      subroutine Broadcast_logical (val)
+
+        implicit none
+
+        logical, intent(in) :: val
+
+        integer :: ierr
+
+
+        call Mpi_bcast (val, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+
+        if (ierr /= MPI_SUCCESS) &
+            call Stop_simulation ('Error broadcasting logical value')
+
+      end subroutine Broadcast_logical
+
+      subroutine Broadcast_real (val)
+
+        implicit none
+
+        real, intent(in) :: val
+
+        integer :: ierr
+
+
+        call Mpi_bcast (val, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+
+        if (ierr /= MPI_SUCCESS) &
+            call Stop_simulation ('Error broadcasting real value')
+
+      end subroutine Broadcast_real
+
+#endif
+
+    end subroutine Broadcast_nml
 
     subroutine Check_nml (this)
 
