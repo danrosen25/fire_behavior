@@ -3,6 +3,10 @@
 
 module fire_behavior_nuopc
 
+#ifdef DM_PARALLEL
+  use mpi
+#endif
+
   use ESMF
   use NUOPC
   use NUOPC_Model, &
@@ -95,6 +99,7 @@ module fire_behavior_nuopc
 
     ! local variables
     type(ESMF_State)        :: importState, exportState
+    integer :: rank, ierr
 
     rc = ESMF_SUCCESS
 
@@ -107,7 +112,18 @@ module fire_behavior_nuopc
       return  ! bail out
 
       ! Read namelist
-    call config_flags%Initialization (file_name = 'namelist.fire')
+#ifdef DM_PARALLEL
+    call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+    if (ierr /= MPI_SUCCESS) call Stop_simulation ('ERROR: mpi_comm_rank failed')
+#else
+    rank = 0
+#endif
+
+    if (rank == 0) call config_flags%Initialization (file_name = 'namelist.fire')
+
+#ifdef DM_PARALLEL
+    call config_flags%Broadcast_nml ()
+#endif
 
     call Init_fire_state (grid, config_flags)
 
