@@ -1,5 +1,8 @@
   module state_mod
 
+#ifdef DM_PARALLEL
+    use mpi
+#endif
     use constants_mod, only : PI
     use datetime_mod, only : datetime_t
     use fmc_mod, only : fmc_t
@@ -13,6 +16,7 @@
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
     use wrf_mod, only : wrf_t, G, RERADIUS
+    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims
 
     implicit none
 
@@ -20,7 +24,9 @@
 
     public :: state_fire_t
 
-    integer, parameter :: N_POINTS_IN_HALO = 5
+    integer, parameter :: N_POINTS_IN_HALO = 5, N_DIMS = 2
+    logical, dimension(2), parameter :: PERIODS = [ .false., .false. ]
+    logical, parameter :: RECORDER = .true. ! Allow MPI recording tasks for performance
 
     type :: state_fire_t
       integer :: ifds, ifde, jfds, jfde, kfds, kfde, ifms, ifme, jfms, jfme, kfms, kfme, &
@@ -259,7 +265,9 @@
       integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2, INIT_MODE_IDEAL = 3
       type (proj_lc_t) :: proj
       logical, parameter :: DEBUG_LOCAL = .false.
-      integer :: ids0, ide0, jds0, jde0, i, j, init_mode
+      integer :: ids0, ide0, jds0, jde0, i, j, init_mode, px, py, ntasks, ierr, cart_comm, rank, ips, ipe, jps, jpe
+      integer, dimension(2) :: coords
+      character (len = 300) :: msg
 
 
       init_mode = INIT_MODE_NONE
@@ -280,12 +288,38 @@
         ! Set dimensions
       Set_dims: select case (init_mode)
         case (INIT_MODE_GEOGRID, INIT_MODE_IDEAL)
+
           if (init_mode == INIT_MODE_GEOGRID) then
             ids0 = geogrid%ifds
             ide0 = geogrid%ifde
             jds0 = geogrid%jfds
             jde0 = geogrid%jfde
           else if (init_mode == INIT_MODE_IDEAL) then
+#ifdef DM_PARALLEL
+            call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
+
+            call Calc_tasks_in_x_and_y (ntasks, config_flags%nx, config_flags%ny, px, py)
+!            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', px, py
+!            call Print_message (msg)
+
+            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [px, py], PERIODS, RECORDER, cart_comm, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
+
+            call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+
+            call Mpi_cart_coords (cart_comm, rank, N_DIMS, coords, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_coords')
+
+            call Calc_patch_dims (config_flags%nx, config_flags%ny, px, py, coords, ips, ipe, jps, jpe)
+
+!            write (msg, '(a10, 6(i5, 1x))') 'i, j', coords(1), coords(2), ips, ipe, jps, jpe
+!            call Print_message (msg)
+
+              
+!            call Stop_simulation ('PAJM end, pajm')
+#endif
             ids0 = 1
             ide0 = config_flags%nx
             jds0 = 1

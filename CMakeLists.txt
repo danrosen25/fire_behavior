@@ -69,6 +69,7 @@ list(APPEND _share_files share/proj_lc_mod.F90
 			 share/ros_mod.F90
 			 share/fmc_mod.F90
 			 share/interp_mod.F90
+			 share/mpi_mod.F90
                          share/constants_mod.F90)
 
 # IO
