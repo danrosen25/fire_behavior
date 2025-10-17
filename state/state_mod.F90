@@ -16,7 +16,7 @@
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
     use wrf_mod, only : wrf_t, G, RERADIUS
-    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims
+    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d
 
     implicit none
 
@@ -396,7 +396,6 @@
       call Print_message (msg)
 
       call this%Print_tiles ()
-!call Stop_simulation ('PAJM end, pajm')
 
       this%nx = this%ifde
       this%ny = this%jfde
@@ -475,16 +474,16 @@
               call Stop_simulation ('Not ready to initialize from fire perimeter inside WRF')
 
         case (INIT_MODE_IDEAL)
-          do j = this%jfds, this%jfde
-            do i = this%ifds, this%ifde
+          do j = this%jfps, this%jfpe
+            do i = this%ifps, this%ifpe
               this%zsf(i, j) = config_flags%elevation + &
                                (i - this%ifds) * config_flags%dz_dx * config_flags%dx + &
                                (j - this%jfds) * config_flags%dz_dy * config_flags%dy
             end do
           end do
-          this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dx
-          this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dy
-          this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%fuel_cat
+          this%dzdxf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%dz_dx
+          this%dzdyf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%dz_dy
+          this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%fuel_cat
 
           if (config_flags%fire_is_real_perim) &
               call Stop_simulation ('Not ready to initialize from fire perimeter in idealized mode')
@@ -562,7 +561,7 @@
       integer, optional :: srx, sry
 
       real, parameter :: OFFSET = 0.5
-      integer :: i, j, sr_x, sr_y
+      integer :: i, j, sr_x, sr_y, iend, jend
       real :: i_atm, j_atm, offset_corners_x, offset_corners_y
 
 
@@ -576,14 +575,31 @@
 
       allocate (this%lons(this%ifms:this%ifme, this%jfms:this%jfme))
       allocate (this%lats(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lons_c(this%nx + 1, this%ny + 1))
-      allocate (this%lats_c(this%nx + 1, this%ny + 1))
+
+!      allocate (this%lons_c(this%ifms:this%ifme, this%jfms:this%jfme))
+!      allocate (this%lats_c(this%ifms:this%ifme, this%jfms:this%jfme))
+
+        ! lats/lons_c have an extra dimension
+      if (this%ifpe == this%ifde) then
+        iend = this%ifpe + 1
+      else
+        iend = this%ifpe
+      end if
+
+      if (this%jfpe == this%jfde) then
+        jend = this%jfpe + 1
+      else
+        jend = this%jfpe
+      end if
+
+      allocate (this%lons_c(this%ifps:iend, this%jfps:jend))
+      allocate (this%lats_c(this%ifps:iend, this%jfps:jend))
 
       offset_corners_x = (1.0 / real (sr_x)) / 2.0
       offset_corners_y = (1.0 / real (sr_y)) / 2.0
 
-      do j = 1, this%ny
-        do i = 1, this%nx
+      do j = this%jfps, this%jfpe
+        do i = this%ifps, this%ifpe
           i_atm = (i - OFFSET) / sr_x + OFFSET
           j_atm = (j - OFFSET) / sr_y + OFFSET
           call proj%Calc_latlon (i = i_atm, j = j_atm, lat = this%lats(i, j), lon = this%lons(i, j))
@@ -592,24 +608,32 @@
         end do
       end do
 
-      do j = 1, this%ny
-        i_atm = (this%nx - OFFSET) / sr_x + OFFSET
-        j_atm = (j - OFFSET) / sr_y + OFFSET
-        call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm - offset_corners_y, &
-            lat = this%lats_c(this%nx + 1, j), lon = this%lons_c(this%nx + 1, j))
-      end do
+        ! Right hand side of the domain
+      if (this%ifpe == this%ifde) then
+        do j = this%jfps, this%jfpe
+          i_atm = (this%ifde - OFFSET) / sr_x + OFFSET
+          j_atm = (j - OFFSET) / sr_y + OFFSET
+          call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm - offset_corners_y, &
+              lat = this%lats_c(this%ifde + 1, j), lon = this%lons_c(this%ifde + 1, j))
+        end do
+      end if
 
-      do i = 1, this%nx
-        i_atm = (i - OFFSET) / sr_x + OFFSET
-        j_atm = (this%ny - OFFSET) / sr_y + OFFSET
-        call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm + offset_corners_y, &
-            lat = this%lats_c(i, this%ny + 1), lon = this%lons_c(i, this%ny + 1))
-      end do
+        ! Top of the domain
+      if (this%jfpe == this%jfde) then
+        do i = this%ifps, this%ifpe
+          i_atm = (i - OFFSET) / sr_x + OFFSET
+           j_atm = (this%jfde - OFFSET) / sr_y + OFFSET
+          call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm + offset_corners_y, &
+              lat = this%lats_c(i, this%jfde + 1), lon = this%lons_c(i, this%jfde + 1))
+        end do
+      end if
 
-      i_atm = (this%nx - OFFSET) / sr_x + OFFSET
-      j_atm = (this%ny - OFFSET) / sr_y + OFFSET
-      call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm + offset_corners_y, &
-          lat = this%lats_c(this%nx + 1, this%ny + 1), lon = this%lons_c(this%nx + 1, this%ny + 1))
+      if (this%ifpe == this%ifde .and. this%jfpe == this%jfde) then
+        i_atm = (this%ifpe - OFFSET) / sr_x + OFFSET
+        j_atm = (this%jfpe - OFFSET) / sr_y + OFFSET
+        call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm + offset_corners_y, &
+            lat = this%lats_c(this%ifpe + 1, this%jfpe + 1), lon = this%lons_c(this%ifpe + 1, this%jfpe + 1))
+      end if
 
     end subroutine Init_latlons
 
@@ -861,34 +885,109 @@
       class (state_fire_t), intent (in) :: this
 
       character (len = :), allocatable :: file_output
+      integer :: rank, ierr
 
 
-      file_output='fire_output_'//this%datetime_now%datetime//'.nc'
+#ifdef DM_PARALLEL
+      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+      if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+#else
+      rank = 0
+#endif
 
-      call Create_netcdf_file (file_name = file_output)
+      if (rank == 0) then
+        file_output='fire_output_'//this%datetime_now%datetime//'.nc'
 
-      call Add_netcdf_dim (file_output, 'nx', this%nx)
-      call Add_netcdf_dim (file_output, 'ny', this%ny)
+        call Create_netcdf_file (file_name = file_output)
 
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'lats', this%lats(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'lons', this%lons(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fgrnhfx', this%fgrnhfx(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fgrnqfx', this%fgrnqfx(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_area', this%fire_area(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fuel_frac_burnt_dt', this%fuel_frac_burnt_dt(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fuel_frac', this%fuel_frac(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'emis_smoke', this%emis_smoke(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_t2', this%fire_t2(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_q2', this%fire_q2(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_psfc', this%fire_psfc(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_rain', this%fire_rain(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fz0', this%fz0(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fmc_g', this%fmc_g(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'uf', this%uf(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'vf', this%vf(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'zsf', this%zsf(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'lfn', this%lfn(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'nfuel_cat', this%nfuel_cat(1:this%nx, 1:this%ny))
+        call Add_netcdf_dim (file_output, 'nx', this%nx)
+        call Add_netcdf_dim (file_output, 'ny', this%ny)
+      end if
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lats', &
+          this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lons', &
+          this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnhfx', &
+          this%fgrnhfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnqfx', &
+          this%fgrnqfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_area', &
+          this%fire_area(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac_burnt_dt', &
+          this%fuel_frac_burnt_dt(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac', &
+          this%fuel_frac(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'emis_smoke', &
+          this%emis_smoke(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_t2', &
+          this%fire_t2(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_q2', &
+          this%fire_q2(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_psfc', &
+          this%fire_psfc(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_rain', &
+          this%fire_rain(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
+          this%fz0(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fmc_g', &
+          this%fmc_g(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', &
+          this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', &
+          this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'zsf', &
+          this%zsf(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lfn', &
+          this%lfn(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
+          this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+    contains
+
+      subroutine Add_netcdf_var_mpi (nx, ny, ifps, ifpe, jfps, jfpe, var_name, var2d_local)
+
+        implicit none
+
+        integer, intent (in) :: nx, ny, ifps, ifpe, jfps, jfpe
+        character (len = *) :: var_name
+        real, dimension(ifps:ifpe, jfps:jfpe), intent (in) :: var2d_local
+
+        real, dimension(nx, ny) :: var2d
+        integer :: rank, ierr
+
+
+#ifdef DM_PARALLEL
+      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+      if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+
+      call Gather_var2d (nx, ny, ifps, ifpe, jfps, jfpe, var2d_local(ifps:ifpe, jfps:jfpe), var2d)
+
+      if (rank == 0) then
+         call Add_netcdf_var (file_output, ['nx', 'ny'], var_name, var2d(1:nx, 1:ny))
+      end if
+#else
+      call Add_netcdf_var (file_output, ['nx', 'ny'], var_name, var2d_local(1:nx, 1:ny))
+#endif
+      end subroutine Add_netcdf_var_mpi
 
     end subroutine Save_state
 
@@ -922,21 +1021,21 @@
 
 
       if (config_flags%ideal_opt == 1) then
-        this%uf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%zonal_wind
-        this%vf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%meridional_wind
+        this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%zonal_wind
+        this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%meridional_wind
       else
         this%uf = 0.0
         this%vf = 0.0
       end if
       this%fmc_g = config_flags%fuelmc_g
         ! Init lfn more than the largest domain side
-      this%lfn(this%ifds:this%ifde, this%jfds:this%jfde) = 2.0 * &
+      this%lfn(this%ifps:this%ifpe, this%jfps:this%jfpe) = 2.0 * &
           max ((this%ifde - this%ifds + 1) * this%dx, (this%jfde - this%jfds + 1) * this%dy)
         ! Init tign_g a bit into the future
       this%tign_g(this%ifps:this%ifpe, this%jfps:this%jfpe) = epsilon (this%tign_g)
 
-      this%fuel_frac(this%ifds:this%ifde, this%jfds:this%jfde) = 1.0
-      this%fire_area(this%ifds:this%ifde, this%jfds:this%jfde) = 0.0
+      this%fuel_frac(this%ifps:this%ifpe, this%jfps:this%jfpe) = 1.0
+      this%fire_area(this%ifps:this%ifpe, this%jfps:this%jfpe) = 0.0
 
       this%emis_smoke = 0.0
 
