@@ -294,14 +294,26 @@
             ide0 = geogrid%ifde
             jds0 = geogrid%jfds
             jde0 = geogrid%jfde
+
+            ips = ids0
+            ipe = ide0
+            jps = jds0
+            jpe = jde0
+
           else if (init_mode == INIT_MODE_IDEAL) then
+
+            ids0 = 1
+            ide0 = config_flags%nx
+            jds0 = 1
+            jde0 = config_flags%ny
+
 #ifdef DM_PARALLEL
             call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
 
             call Calc_tasks_in_x_and_y (ntasks, config_flags%nx, config_flags%ny, px, py)
-!            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', px, py
-!            call Print_message (msg)
+            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', px, py
+            call Print_message (msg)
 
             call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [px, py], PERIODS, RECORDER, cart_comm, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
@@ -314,31 +326,27 @@
 
             call Calc_patch_dims (config_flags%nx, config_flags%ny, px, py, coords, ips, ipe, jps, jpe)
 
-!            write (msg, '(a10, 6(i5, 1x))') 'i, j', coords(1), coords(2), ips, ipe, jps, jpe
-!            call Print_message (msg)
-
-              
-!            call Stop_simulation ('PAJM end, pajm')
+#else
+            ips = ids0
+            ipe = ide0
+            jps = jds0
+            jpe = jde0
 #endif
-            ids0 = 1
-            ide0 = config_flags%nx
-            jds0 = 1
-            jde0 = config_flags%ny
           end if 
 
           this%ifds = ids0
           this%ifde = ide0
-          this%ifms = ids0 - N_POINTS_IN_HALO
-          this%ifme = ide0 + N_POINTS_IN_HALO
-          this%ifps = ids0
-          this%ifpe = ide0
+          this%ifms = ips - N_POINTS_IN_HALO
+          this%ifme = ipe + N_POINTS_IN_HALO
+          this%ifps = ips
+          this%ifpe = ipe
 
           this%jfds = jds0
           this%jfde = jde0
-          this%jfms = jds0 - N_POINTS_IN_HALO
-          this%jfme = jde0 + N_POINTS_IN_HALO
-          this%jfps = jds0
-          this%jfpe = jde0
+          this%jfms = jps - N_POINTS_IN_HALO
+          this%jfme = jpe + N_POINTS_IN_HALO
+          this%jfps = jps
+          this%jfpe = jpe
 
           this%kfds = config_flags%kds
           this%kfde = config_flags%kde
@@ -383,7 +391,12 @@
 
       end select Set_dims
 
+      write (msg, '(a11, 4(a4, i7))') &
+          'CFBM Patch:', ' IPS', this%ifps, ' IPE', this%ifpe, ' JPS', this%jfps, ' JPE', this%jfpe
+      call Print_message (msg)
+
       call this%Print_tiles ()
+!call Stop_simulation ('PAJM end, pajm')
 
       this%nx = this%ifde
       this%ny = this%jfde
@@ -815,8 +828,8 @@
       write (OUTPUT_UNIT, *) 'jfms = ', this%jfms, 'jfme = ', this%jfme
       write (OUTPUT_UNIT, *) 'kfms = ', this%kfms, 'kfme = ', this%kfme
 
-      write (OUTPUT_UNIT, *) 'ifts = ', this%ifts, 'ifte = ', this%ifte
-      write (OUTPUT_UNIT, *) 'jfts = ', this%jfts, 'jfte = ', this%jfte
+!      write (OUTPUT_UNIT, *) 'ifts = ', this%ifts, 'ifte = ', this%ifte
+!      write (OUTPUT_UNIT, *) 'jfts = ', this%jfts, 'jfte = ', this%jfte
       write (OUTPUT_UNIT, *) 'kfts = ', this%kfts, 'kfte = ', this%kfte
 
       write (OUTPUT_UNIT, *) ''
