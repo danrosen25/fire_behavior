@@ -10,13 +10,13 @@
     use geogrid_mod, only : geogrid_t
     use ignition_line_mod, only : ignition_line_t
     use namelist_mod, only : namelist_t
-    use netcdf_mod, only : Create_netcdf_file, Add_netcdf_dim, Add_netcdf_var
+    use netcdf_mod, only : Create_netcdf_file, Add_netcdf_dim, Add_netcdf_var, Add_netcdf_var_mpi, NAME_DIM_X, NAME_DIM_Y
     use proj_lc_mod, only : proj_lc_t
     use ros_mod, only : ros_t
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
     use wrf_mod, only : wrf_t, G, RERADIUS
-    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d
+    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims
 
     implicit none
 
@@ -895,99 +895,70 @@
       rank = 0
 #endif
 
+      file_output='fire_output_'//this%datetime_now%datetime//'.nc'
       if (rank == 0) then
-        file_output='fire_output_'//this%datetime_now%datetime//'.nc'
-
         call Create_netcdf_file (file_name = file_output)
 
-        call Add_netcdf_dim (file_output, 'nx', this%nx)
-        call Add_netcdf_dim (file_output, 'ny', this%ny)
+        call Add_netcdf_dim (file_output, NAME_DIM_X, this%nx)
+        call Add_netcdf_dim (file_output, NAME_DIM_Y, this%ny)
       end if
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lats', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lats', &
           this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lons', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lons', &
           this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnhfx', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnhfx', &
           this%fgrnhfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnqfx', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnqfx', &
           this%fgrnqfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_area', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_area', &
           this%fire_area(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac_burnt_dt', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac_burnt_dt', &
           this%fuel_frac_burnt_dt(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac', &
           this%fuel_frac(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'emis_smoke', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'emis_smoke', &
           this%emis_smoke(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_t2', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_t2', &
           this%fire_t2(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_q2', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_q2', &
           this%fire_q2(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_psfc', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_psfc', &
           this%fire_psfc(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_rain', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_rain', &
           this%fire_rain(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
           this%fz0(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fmc_g', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fmc_g', &
           this%fmc_g(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', &
           this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', &
           this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'zsf', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'zsf', &
           this%zsf(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lfn', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lfn', &
           this%lfn(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
           this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe))
-
-    contains
-
-      subroutine Add_netcdf_var_mpi (nx, ny, ifps, ifpe, jfps, jfpe, var_name, var2d_local)
-
-        implicit none
-
-        integer, intent (in) :: nx, ny, ifps, ifpe, jfps, jfpe
-        character (len = *) :: var_name
-        real, dimension(ifps:ifpe, jfps:jfpe), intent (in) :: var2d_local
-
-        real, dimension(nx, ny) :: var2d
-        integer :: rank, ierr
-
-
-#ifdef DM_PARALLEL
-      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
-      if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
-
-      call Gather_var2d (nx, ny, ifps, ifpe, jfps, jfpe, var2d_local(ifps:ifpe, jfps:jfpe), var2d)
-
-      if (rank == 0) then
-         call Add_netcdf_var (file_output, ['nx', 'ny'], var_name, var2d(1:nx, 1:ny))
-      end if
-#else
-      call Add_netcdf_var (file_output, ['nx', 'ny'], var_name, var2d_local(1:nx, 1:ny))
-#endif
-      end subroutine Add_netcdf_var_mpi
 
     end subroutine Save_state
 

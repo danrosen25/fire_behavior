@@ -1,18 +1,24 @@
   module netcdf_mod
 
     use stderrout_mod, only : Stop_simulation, Print_message
+    use mpi_mod, only : Gather_var2d
 
     implicit none
 
     private
 
+    character (len = 2), parameter :: NAME_DIM_X = 'nx', NAME_DIM_Y = 'ny'
     public :: Get_netcdf_var, Get_netcdf_att, Get_netcdf_dim, Create_netcdf_file, Add_netcdf_dim, Add_netcdf_var, &
-       Is_netcdf_file_present, Is_netcdf_var_present
+       Is_netcdf_file_present, Is_netcdf_var_present, Add_netcdf_var_mpi, NAME_DIM_X, NAME_DIM_Y
 
     interface Add_netcdf_var
       module procedure Add_netcdf_var_real32_2d
       module procedure Add_netcdf_var_real32_3d
     end interface Add_netcdf_var
+
+    interface Add_netcdf_var_mpi
+      module procedure Add_netcdf_var_real32_2d_mpi
+    end interface Add_netcdf_var_mpi
 
     interface Get_netcdf_var
       module procedure Get_netcdf_var_char_1d
@@ -100,6 +106,36 @@
       call Check_status (status)
 
     end subroutine Add_netcdf_var_real32_2d
+
+    subroutine Add_netcdf_var_real32_2d_mpi (file_name, nx, ny, ifps, ifpe, jfps, jfpe, var_name, var2d_local)
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+      implicit none
+
+      integer, intent (in) :: nx, ny, ifps, ifpe, jfps, jfpe
+      character (len = *), intent (in) :: file_name, var_name
+      real, dimension(ifps:ifpe, jfps:jfpe), intent (in) :: var2d_local
+
+      real, dimension(nx, ny) :: var2d
+      integer :: rank, ierr
+
+
+#ifdef DM_PARALLEL
+      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+      if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+
+      call Gather_var2d (nx, ny, ifps, ifpe, jfps, jfpe, var2d_local(ifps:ifpe, jfps:jfpe), var2d)
+
+      if (rank == 0) then
+         call Add_netcdf_var (file_name, [NAME_DIM_X, NAME_DIM_Y], var_name, var2d(1:nx, 1:ny))
+      end if
+#else
+      call Add_netcdf_var (file_name, [NAME_DIM_X, NAME_DIM_X], var_name, var2d_local(1:nx, 1:ny))
+#endif
+
+    end subroutine Add_netcdf_var_real32_2d_mpi
 
     subroutine Add_netcdf_var_real32_3d (file_name, name_dims, varname, var)
 
