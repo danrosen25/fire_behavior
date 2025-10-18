@@ -26,7 +26,7 @@
 
     integer, parameter :: N_POINTS_IN_HALO = 5, N_DIMS = 2
     logical, dimension(2), parameter :: PERIODS = [ .false., .false. ]
-    logical, parameter :: RECORDER = .true. ! Allow MPI recording tasks for performance
+    logical, parameter :: REORDER = .true. ! Allow MPI recording tasks for performance
 
     type :: state_fire_t
       integer :: ifds, ifde, jfds, jfde, kfds, kfde, ifms, ifme, jfms, jfme, kfms, kfme, &
@@ -97,6 +97,10 @@
       integer :: nx ! "number of longitudinal grid points" "1"
       integer :: ny ! "number of latitudinal grid points" "1"
       real :: cen_lat, cen_lon
+
+        ! For MPI tasks
+      integer :: cart_comm
+      integer :: px, py ! Number of MPI tasks in X and Y, respectively
     contains
       procedure, public :: Allocate_vars => Allocate_vars
       procedure, public :: Convert_sb_to_ander => Convert_scottburgan_to_anderson
@@ -312,19 +316,22 @@
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
 
             call Calc_tasks_in_x_and_y (ntasks, config_flags%nx, config_flags%ny, px, py)
-            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', px, py
+            this%px = px
+            this%py = py
+            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', this%px, this%py
             call Print_message (msg)
 
-            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [px, py], PERIODS, RECORDER, cart_comm, ierr)
+            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
+            this%cart_comm = cart_comm
 
-            call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+            call Mpi_comm_rank (this%cart_comm, rank, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
 
-            call Mpi_cart_coords (cart_comm, rank, N_DIMS, coords, ierr)
+            call Mpi_cart_coords (this%cart_comm, rank, N_DIMS, coords, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_coords')
 
-            call Calc_patch_dims (config_flags%nx, config_flags%ny, px, py, coords, ips, ipe, jps, jpe)
+            call Calc_patch_dims (config_flags%nx, config_flags%ny, this%px, this%py, coords, ips, ipe, jps, jpe)
 
 #else
             ips = ids0
