@@ -99,7 +99,8 @@
       real :: cen_lat, cen_lon
 
         ! For MPI tasks
-      integer :: cart_comm
+      integer :: cart_comm ! The MPI communicator with the domain decomposition
+      integer :: ntasks ! Number of MPI tasks
       integer :: px, py ! Number of MPI tasks in X and Y, respectively
     contains
       procedure, public :: Allocate_vars => Allocate_vars
@@ -314,8 +315,9 @@
 #ifdef DM_PARALLEL
             call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
+            this%ntasks = ntasks
 
-            call Calc_tasks_in_x_and_y (ntasks, config_flags%nx, config_flags%ny, px, py)
+            call Calc_tasks_in_x_and_y (this%ntasks, config_flags%nx, config_flags%ny, px, py)
             this%px = px
             this%py = py
             write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', this%px, this%py
