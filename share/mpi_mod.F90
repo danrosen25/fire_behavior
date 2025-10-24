@@ -4,7 +4,8 @@
 
     private
 
-    public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange, Do_halo_exchange_with_corners
+    public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange, Do_halo_exchange_with_corners, &
+        Max_across_mpi_tasks, Sum_across_mpi_tasks
 
   contains
 
@@ -217,7 +218,6 @@
 
     end subroutine Do_halo_exchange
 
-
     subroutine Do_halo_exchange_with_corners (patch, ims, ime, jms, jme, ips, ipe, jps, jpe, nghost, cart_comm)
 
 #ifdef DM_PARALLEL
@@ -412,5 +412,51 @@
 #endif
 
     end subroutine Gather_var2d
+
+    subroutine Max_across_mpi_tasks (local_max, cart_comm, global_max)
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+
+      implicit none
+
+      real, intent (in) :: local_max
+      integer, intent (in) :: cart_comm
+      real, intent (out) :: global_max
+
+      integer :: ierr
+
+
+#ifdef DM_PARALLEL
+      call MPI_Allreduce(local_max, global_max, 1, MPI_REAL, MPI_MAX, cart_comm, ierr)
+#else
+      global_max = local_max
+#endif
+
+    end subroutine Max_across_mpi_tasks
+
+    subroutine Sum_across_mpi_tasks (local_sum, cart_comm, global_sum)
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+
+      implicit none
+
+      real, intent (in) :: local_sum
+      integer, intent (in) :: cart_comm
+      real, intent (out) :: global_sum
+
+      integer :: ierr
+
+
+#ifdef DM_PARALLEL
+      call MPI_Allreduce(local_sum, global_sum, 1, MPI_REAL, MPI_SUM, cart_comm, ierr)
+#else
+      global_sum = local_sum
+#endif
+
+    end subroutine Sum_across_mpi_tasks
 
   end module mpi_mod

@@ -15,6 +15,10 @@
     use fmc_mod, only : FMC_WRFFIRE
     use fmc_wrffire_mod, only : fmc_wrffire_t
 
+#ifdef DM_PARALLEL
+    use mpi_mod, only : Max_across_mpi_tasks, Sum_across_mpi_tasks
+#endif
+
     implicit none
 
     private
@@ -117,68 +121,78 @@
 
     end subroutine Advance_fire_components
 
-    function Calc_domain_stats (fun, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, a, b) result (return_value)
+    function Calc_domain_stats (fun, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, a, b, cart_comm) result (return_value)
 
       implicit none
 
-      integer, intent (in) :: fun, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte
+      integer, intent (in) :: fun, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, cart_comm
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: a, b
       real :: return_value
 
-      real :: lsum, void
+      real :: lmax, lsum, gmax, gsum
       integer :: i, j
-      real, save :: psum, gsum
-      logical :: dosum, domax
-      character (len = 256) :: msg
 
 
       if (fun == REAL_SUM) then
-        void = 0.0
-        lsum = void
-        do j = jfts, jfte
-          do i = ifts, ifte
-            lsum = lsum + a(i,j)
+        lsum = 0.0
+        do j = jfps, jfpe
+          do i = ifps, ifpe
+            lsum = lsum + a(i, j)
           end do
         end do
+#ifdef DM_PARALLEL
+        call Sum_across_mpi_tasks (lsum, cart_comm, gsum)
+        return_value = gsum
+#else
+        return_value = lsum
+#endif
+
       else if (fun == RNRM_SUM) then
-        void = 0.0
-        lsum = void
-        do j = jfts, jfte
-          do i = ifts, ifte
+        lsum = 0.0
+        do j = jfps, jfpe
+          do i = ifps, ifpe
             lsum = lsum + sqrt (a(i, j) * a(i, j) + b(i, j) * b(i, j))
           end do
         end do
+#ifdef DM_PARALLEL
+        call Sum_across_mpi_tasks (lsum, cart_comm, gsum)
+        return_value = gsum
+#else
+        return_value = lsum
+#endif
+
       else if (fun == REAL_MAX) then
-        void = - huge (lsum)
-        lsum = void
-        do j = jfts, jfte
-          do i = ifts, ifte
-            lsum = max (lsum, a(i, j))
+        lmax = - huge (lmax)
+        do j = jfps, jfpe
+          do i = ifps, ifpe
+            lmax = max (lmax, a(i, j))
           end do
         end do
+#ifdef DM_PARALLEL
+        call Max_across_mpi_tasks (lmax, cart_comm, gmax)
+        return_value = gmax
+#else
+        return_value = lmax
+#endif
+
       else if (fun == RNRM_MAX) then
-        void = 0.0
-        lsum = void
-        do j = jfts, jfte
-          do i = ifts, ifte
-            lsum = max (lsum, sqrt (a(i, j) * a(i, j) + b(i, j) * b(i, j)))
+        lmax = 0.0
+        do j = jfps, jfpe
+          do i = ifps, ifpe
+            lmax = max (lmax, sqrt (a(i, j) * a(i, j) + b(i, j) * b(i, j)))
           end do
         end do
+#ifdef DM_PARALLEL
+        call Max_across_mpi_tasks (lmax, cart_comm, gmax)
+        return_value = gmax
+#else
+        return_value = lmax
+#endif
+
       else
         call Stop_simulation ('Value not supported for printing summary')
+
       end if
-
-      if (lsum .ne. lsum) call Stop_simulation ('NaN detected in calculating summary')
-
-      dosum = fun == REAL_SUM .or. fun == RNRM_SUM
-      domax = fun == REAL_MAX .or. fun == RNRM_MAX
-
-      psum = void
-      if (dosum) psum = psum + lsum
-      if (domax) psum = max (psum, lsum)
-      gsum = psum
-
-      return_value = gsum
 
     end function Calc_domain_stats
 
@@ -192,7 +206,7 @@
       real :: tfa, thf, mhf, tqf, mqf, aw, mw
       real :: time_start
       integer :: stat_lev = 1
-      integer :: ifds, ifde, jfds, jfde, ifms, ifme, jfms, jfme
+      integer :: ifds, ifde, jfds, jfde, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe
       character (len = 256) :: msg
 
 
@@ -206,26 +220,31 @@
       jfms = grid%jfms
       jfme = grid%jfme
 
+      ifps = grid%ifps
+      ifpe = grid%ifpe
+      jfps = grid%jfps
+      jfpe = grid%jfpe
+
       time_start = grid%itimestep * grid%dt
 
-      aw = Calc_domain_stats (RNRM_SUM, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, grid%uf,grid%vf) / &
+      aw = Calc_domain_stats (RNRM_SUM, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, grid%uf,grid%vf, grid%cart_comm) / &
           ((ifde - ifds + 1) * (jfde - jfds + 1))
-      mw = Calc_domain_stats (RNRM_MAX, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, grid%uf, grid%vf)
+      mw = Calc_domain_stats (RNRM_MAX, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, grid%uf, grid%vf, grid%cart_comm)
 
-      tfa = Calc_domain_stats (REAL_SUM, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, grid%fire_area, &
-         grid%fire_area) * grid%dx * grid%dy
+      tfa = Calc_domain_stats (REAL_SUM, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, grid%fire_area, &
+         grid%fire_area, grid%cart_comm) * grid%dx * grid%dy
 
-      thf = Calc_domain_stats (REAL_SUM, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, grid%fgrnhfx, &
-          grid%fgrnhfx) * grid%dx * grid%dy
+      thf = Calc_domain_stats (REAL_SUM, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, grid%fgrnhfx, &
+          grid%fgrnhfx, grid%cart_comm) * grid%dx * grid%dy
 
-      mhf = Calc_domain_stats (REAL_MAX, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, grid%fgrnhfx, &
-          grid%fgrnhfx)
+      mhf = Calc_domain_stats (REAL_MAX, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, grid%fgrnhfx, &
+          grid%fgrnhfx, grid%cart_comm)
 
-      tqf = Calc_domain_stats (REAL_SUM, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, grid%fgrnqfx, &
-          grid%fgrnqfx) * grid%dx * grid%dy
+      tqf = Calc_domain_stats (REAL_SUM, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, grid%fgrnqfx, &
+          grid%fgrnqfx, grid%cart_comm) * grid%dx * grid%dy
 
-      mqf = Calc_domain_stats (REAL_MAX, ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, grid%fgrnqfx, &
-          grid%fgrnqfx)
+      mqf = Calc_domain_stats (REAL_MAX, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, grid%fgrnqfx, &
+          grid%fgrnqfx, grid%cart_comm)
 
  91   format('Time ',f11.3,' s ',a,e12.3,1x,a)
 
@@ -249,7 +268,6 @@
 
       write (msg, 91) time_start, 'Max latent heat flux', mqf, 'W/m^2'
       call Print_message (msg)
-
 
     end subroutine Print_summary
 
