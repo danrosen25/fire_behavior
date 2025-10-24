@@ -22,7 +22,7 @@
 
     private
 
-    public :: state_fire_t
+    public :: state_fire_t, N_POINTS_IN_HALO
 
     integer, parameter :: N_POINTS_IN_HALO = 5, N_DIMS = 2
     logical, dimension(2), parameter :: PERIODS = [ .false., .false. ]

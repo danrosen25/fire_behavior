@@ -15,9 +15,13 @@
 
     use ros_wrffire_mod, only: ros_wrffire_t
     use stderrout_mod, only: Stop_simulation, Print_message
-    use state_mod, only: state_fire_t
+    use state_mod, only: state_fire_t, N_POINTS_IN_HALO
     use ignition_line_mod, only : ignition_line_t
     use ros_mod, only : ros_t
+
+#ifdef DM_PARALLEL
+    use mpi_mod, only : Do_halo_exchange
+#endif
 
     implicit none
 
@@ -269,14 +273,15 @@
     subroutine Prop_level_set (ifds, ifde, jfds, jfde, ifms, ifme, jfms, jfme, &
         num_tiles, i_start, i_end, j_start, j_end, ts, dt, dx, dy, fire_upwinding, fire_viscosity, &
         fire_viscosity_bg, fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, &
-        tbound, lfn_in, lfn_0, lfn_1, lfn_2, lfn_out, tign, ros, uf, vf, dzdxf, dzdyf, ros_model)
+        tbound, lfn_in, lfn_0, lfn_1, lfn_2, lfn_out, tign, ros, uf, vf, dzdxf, dzdyf, ros_model, cart_comm, &
+        ifps, ifpe, jfps, jfpe)
 
       ! Purpose: Advance the level set function from time ts to time ts + dt
 
       implicit none
       
       integer, intent(in) :: ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, num_tiles, &
-          fire_upwinding, fire_viscosity_ngp, fire_lsm_band_ngp
+          fire_upwinding, fire_viscosity_ngp, fire_lsm_band_ngp, cart_comm, ifps, ifpe, jfps, jfpe
       integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
       real, intent(in) :: fire_viscosity, fire_viscosity_bg, fire_viscosity_band
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: uf, vf, dzdxf, dzdyf
@@ -310,6 +315,10 @@
         end do
       end do
       !$OMP END PARALLEL DO
+
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_0, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
 
         ! Runge-Kutta step 1
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 1...')
@@ -349,6 +358,11 @@
       end do
       !$OMP END PARALLEL DO
 
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_1, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+
         ! Runge-Kutta step 2
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 2...')
 
@@ -387,6 +401,10 @@
       end do
       !$OMP END PARALLEL DO
 
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_2, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
         ! Runge-Kutta step 3
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 3...')
 
@@ -419,10 +437,15 @@
         do j = jfts, jfte
           do i = ifts, ifte
             lfn_out(i, j) = lfn_0(i, j) + dt * tend(i, j)
+!            lfn_2(i,j) = lfn_out(i,j) ! lfn_2=lfn_out (needed for reinitialization purposes)
           end do
         end do
       end do
       !$OMP END PARALLEL DO
+
+!#ifdef DM_PARALLEL
+!      include "HALO_FIRE_LFN_2.inc"
+!#endif
 
         ! CFL check, tbound is the max allowed time step
       tbound = min(min(tbound, tbound2), tbound3)
@@ -441,7 +464,8 @@
     subroutine Reinit_level_set (num_tiles, i_start, i_end, j_start, j_end, ifms, ifme, jfms, jfme, &
         ifds, ifde, jfds, jfde, ts, dt, dx, dy, fire_upwinding_reinit, &
         fire_lsm_reinit_iter, fire_lsm_band_ngp, lfn_in, lfn_2, lfn_s0, &
-        lfn_s1, lfn_s2, lfn_s3, lfn_out, tign)
+        lfn_s1, lfn_s2, lfn_s3, lfn_out, tign, cart_comm, &
+        ifps, ifpe, jfps, jfpe)
 
     ! Purpose: Level-set function reinitialization
     !
@@ -455,7 +479,7 @@
 
       implicit none
 
-      integer, intent (in) :: num_tiles
+      integer, intent (in) :: num_tiles, cart_comm, ifps, ifpe, jfps, jfpe
       integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
       integer, intent (in) :: ifms, ifme, jfms, jfme
       integer, intent (in) :: ifds, ifde, jfds, jfde
@@ -488,6 +512,10 @@
         end do
       end do
       !$OMP END PARALLEL DO
+
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_s3, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
  
       !$OMP PARALLEL DO   &
       !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
@@ -524,6 +552,10 @@
         end do
         !$OMP END PARALLEL DO
  
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_s1, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
         !$OMP PARALLEL DO   &
         !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
@@ -553,6 +585,10 @@
         end do
         !$OMP END PARALLEL DO
 
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_s2, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
         !$OMP PARALLEL DO   &
         !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
         do ij = 1, num_tiles
@@ -581,6 +617,10 @@
               fire_upwinding_reinit)
         end do
         !$OMP END PARALLEL DO
+
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_s3, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
 
         !$OMP PARALLEL DO   &
         !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
