@@ -275,6 +275,8 @@
       character (len = 300) :: msg
 
 
+      if (DEBUG_LOCAL) call Print_message ('Entering Init_domain...')
+
       init_mode = INIT_MODE_NONE
       if (config_flags%ideal_opt == 1) init_mode = INIT_MODE_IDEAL
       if (present (geogrid)) init_mode = INIT_MODE_GEOGRID
@@ -291,6 +293,7 @@
           call Stop_simulation ('Not enough information to initialize domain')
 
         ! Set dimensions
+      if (DEBUG_LOCAL) call Print_message ('  Setting dimensions...')
       Set_dims: select case (init_mode)
         case (INIT_MODE_GEOGRID, INIT_MODE_IDEAL)
 
@@ -411,9 +414,11 @@
       this%dt = config_flags%dt
 
         ! Init memory
+      if (DEBUG_LOCAL) call Print_message ('  Allocating memory...')
       call this%Allocate_vars (this%ifms, this%ifme, this%jfms, this%jfme)
 
         ! Set projection
+      if (DEBUG_LOCAL) call Print_message ('  Setting projection...')
       Set_proj: select case (init_mode)
         case (INIT_MODE_GEOGRID)
           proj = geogrid%Get_atm_proj ()
@@ -456,8 +461,10 @@
       this%proj = proj
 
         ! Init vars
+      if (DEBUG_LOCAL) call Print_message ('  Initializing default variables...')
       call this%Set_vars_to_default (config_flags)
 
+      if (DEBUG_LOCAL) call Print_message ('  Setting topo and fuels...')
       Set_topo_fuels: select case (init_mode)
         case (INIT_MODE_GEOGRID)
           this%zsf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%elevations
@@ -505,9 +512,12 @@
       if (config_flags%fuel_opt == FUEL_ANDERSON) call this%Convert_sb_to_ander ()
 
         ! Set clock
+      if (DEBUG_LOCAL) call Print_message ('  Setting clock...')
       call this%Set_time_stamps (config_flags)
 
       if (DEBUG_LOCAL) call this%Print()
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Init_domain...')
 
     end subroutine Init_domain
 
