@@ -99,7 +99,7 @@
 #ifdef DM_PARALLEL
       call MPI_Comm_rank(cart_comm, rank, ierr)
       call MPI_Cart_coords(cart_comm, rank, 2, coords, ierr)
-      print *, 'Rank =', rank, 'Coords =', coords
+!      print *, 'Rank =', rank, 'Coords =', coords
 
       nx = ipe - ips + 1
       ny = jpe - jps + 1
@@ -107,13 +107,13 @@
       tag_base = 1000
 
         ! Diagnostics
-      print *, 'rank =', rank, 'before = ', patch(ips-nghost:ipe+nghost, jps)
-      print *, 'rank =', rank, 'antes  = ', patch(ips, jps-nghost:jpe+nghost)
+!      print *, 'rank =', rank, 'before = ', patch(ips-nghost:ipe+nghost, jps)
+!      print *, 'rank =', rank, 'antes  = ', patch(ips, jps-nghost:jpe+nghost)
 
         ! Get neighbor ranks in Cartesian topology
       call MPI_Cart_shift(cart_comm, 0, 1, nbr_left, nbr_right, ierr)
       call MPI_Cart_shift(cart_comm, 1, 1, nbr_down, nbr_up, ierr)
-      print *, 'Rank=', rank, 'Nbr_up=', nbr_up, 'Nbr_down=', nbr_down
+!      print *, 'Rank=', rank, 'Nbr_up=', nbr_up, 'Nbr_down=', nbr_down
 
         ! Allocate buffers
       allocate(sendbuf_right(ny*nghost), recvbuf_left(ny*nghost))
@@ -214,8 +214,8 @@
       end if
 
         ! Diagnostics
-      print *, 'rank =', rank, 'after = ', patch(ips-nghost:ipe+nghost, jps)
-      print *, 'rank =', rank, 'despues = ', patch(ips, jps-nghost:jpe+nghost)
+!      print *, 'rank =', rank, 'after = ', patch(ips-nghost:ipe+nghost, jps)
+!      print *, 'rank =', rank, 'despues = ', patch(ips, jps-nghost:jpe+nghost)
 
         ! Deallocate buffers
       deallocate(sendbuf_right, recvbuf_left)
@@ -223,10 +223,6 @@
       deallocate(sendbuf_up,    recvbuf_down)
       deallocate(sendbuf_down,  recvbuf_up)
 
-
-!call mpi_barrier (MPI_COMM_WORLD, ierr)
-!call mpi_abort (MPI_COMM_WORLD, 1, ierr)
-!call mpi_finalize (ierr)
 #endif
 
     end subroutine Do_halo_exchange
