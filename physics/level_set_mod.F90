@@ -27,7 +27,7 @@
 
     private
 
-    public :: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, Stop_if_close_to_bdy
+    public :: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, Stop_if_close_to_bdy, Copy_lfnout_to_lfn
 
     integer, parameter :: BDY_ENO1 = 10
 
@@ -269,6 +269,25 @@
       if (fuel_frac_left > 1.0) call Stop_simulation ('Remaining fuel fraction > 1')
 
     end subroutine Calc_fuel_left_at_grid_point
+
+    pure subroutine Copy_lfnout_to_lfn (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, lfn_out, lfn)
+
+      implicit none
+
+      integer, intent (in) :: ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme
+      real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lfn_out
+      real, dimension (ifms:ifme, jfms:jfme), intent (out) :: lfn
+
+      integer :: i, j
+
+
+      do j = jfts, jfte
+        do i = ifts, ifte
+          lfn(i, j) = lfn_out(i, j)
+        end do
+      end do
+
+    end subroutine Copy_lfnout_to_lfn
 
     subroutine Prop_level_set (ifds, ifde, jfds, jfde, ifms, ifme, jfms, jfme, &
         num_tiles, i_start, i_end, j_start, j_end, ts, dt, dx, dy, fire_upwinding, fire_viscosity, &
