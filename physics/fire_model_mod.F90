@@ -9,7 +9,7 @@
     use stderrout_mod, only : Print_message
 
 #ifdef DM_PARALLEL
-    use mpi_mod, only : Do_halo_exchange
+    use mpi_mod, only : Do_halo_exchange_with_corners
 #endif
 
     private
@@ -82,7 +82,7 @@
       !$OMP END PARALLEL DO
 
 #ifdef DM_PARALLEL
-      call Do_halo_exchange (grid%tign_g, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
+      call Do_halo_exchange_with_corners (grid%tign_g, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
 #endif
 
       if (DEBUG_LOCAL) call Print_message ('calling Calc_flame_length...')
@@ -121,7 +121,7 @@
       !$OMP END PARALLEL DO
 
 #ifdef DM_PARALLEL
-      call Do_halo_exchange (grid%lfn, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
+      call Do_halo_exchange_with_corners (grid%lfn, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
 #endif
  
       if (DEBUG_LOCAL) call Print_message ('calling Ignite_prescribed_fires...')

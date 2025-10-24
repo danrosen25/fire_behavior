@@ -4,7 +4,7 @@
 
     private
 
-    public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange
+    public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange, Do_halo_exchange_with_corners
 
   contains
 
@@ -216,6 +216,149 @@
 #endif
 
     end subroutine Do_halo_exchange
+
+
+    subroutine Do_halo_exchange_with_corners (patch, ims, ime, jms, jme, ips, ipe, jps, jpe, nghost, cart_comm)
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+
+      implicit none
+
+      integer, intent (in) :: cart_comm, ims, ime, jms, jme, ips, ipe, jps, jpe, nghost
+      real, dimension(ims:ime, jms:jme), intent (inout) :: patch
+
+      integer :: ierr, nbr_left, nbr_right, nbr_up, nbr_down, tag_base
+      integer :: nx, ny, rank, i, j, k
+      integer, dimension(8) :: reqs
+      integer, dimension(2) :: coords
+      real, dimension(:), allocatable :: sendbuf_right, recvbuf_left, sendbuf_left, recvbuf_right
+      real, dimension(:), allocatable :: sendbuf_up, recvbuf_down, sendbuf_down, recvbuf_up
+
+
+#ifdef DM_PARALLEL
+      call MPI_Comm_rank(cart_comm, rank, ierr)
+      call MPI_Cart_coords(cart_comm, rank, 2, coords, ierr)
+
+      nx = ipe - ips + 1
+      ny = jpe - jps + 1
+      tag_base = 1000
+
+        ! Neighbor ranks
+      call MPI_Cart_shift (cart_comm, 0, 1, nbr_left, nbr_right, ierr)
+      call MPI_Cart_shift (cart_comm, 1, 1, nbr_down, nbr_up, ierr)
+
+        ! Halo exchange in X direction
+      allocate (sendbuf_right(ny * nghost), recvbuf_left(ny * nghost))
+      allocate (sendbuf_left(ny * nghost), recvbuf_right(ny * nghost))
+
+        ! Pack right send buffer
+      k = 0
+      do j = jps, jpe
+        do i = ipe - nghost + 1, ipe
+          k = k + 1
+          sendbuf_right(k) = patch(i, j)
+        end do
+      end do
+
+        ! Pack left send buffer
+      k = 0
+      do j = jps, jpe
+        do i = ips, ips + nghost - 1
+          k = k + 1
+          sendbuf_left(k) = patch(i, j)
+        end do
+      end do
+
+        ! Exchange left/right
+      call MPI_Irecv (recvbuf_left, ny * nghost, MPI_REAL, nbr_left, tag_base + 0, cart_comm, reqs(1), ierr)
+      call MPI_Isend (sendbuf_right, ny * nghost, MPI_REAL, nbr_right, tag_base + 0, cart_comm, reqs(2), ierr)
+      call MPI_Irecv (recvbuf_right, ny * nghost, MPI_REAL, nbr_right, tag_base + 1, cart_comm, reqs(3), ierr)
+      call MPI_Isend (sendbuf_left, ny * nghost, MPI_REAL, nbr_left, tag_base + 1, cart_comm, reqs(4), ierr)
+
+      call MPI_Waitall (4, reqs, MPI_STATUSES_IGNORE, ierr)
+
+        ! Unpack left halo
+      if (nbr_left /= MPI_PROC_NULL) then
+        k = 0
+        do j = jps, jpe
+          do i = ips - nghost, ips - 1
+            k = k + 1
+            patch(i, j) = recvbuf_left(k)
+          end do
+        end do
+      end if
+
+        ! Unpack right halo
+      if (nbr_right /= MPI_PROC_NULL) then
+        k = 0
+        do j = jps, jpe
+          do i = ipe + 1, ipe + nghost
+            k = k + 1
+            patch(i, j) = recvbuf_right(k)
+          end do
+        end do
+      end if
+
+      deallocate (sendbuf_right, recvbuf_left, sendbuf_left, recvbuf_right)
+
+        ! Exchange in Y direction (including halos in X direction)
+      allocate (sendbuf_up((nx + 2 * nghost) * nghost), recvbuf_down((nx + 2 * nghost) * nghost))
+      allocate (sendbuf_down((nx + 2 * nghost) * nghost), recvbuf_up((nx + 2 * nghost) * nghost))
+
+        ! Pack up send buffer
+      k = 0
+      do j = jpe - nghost + 1, jpe
+        do i = ips - nghost, ipe + nghost
+          k = k + 1
+          sendbuf_up(k) = patch(i, j)
+        end do
+      end do
+
+        ! Pack down send buffer
+      k = 0
+      do j = jps, jps + nghost - 1
+        do i = ips - nghost, ipe + nghost
+          k = k + 1
+          sendbuf_down(k) = patch(i, j)
+        end do
+      end do
+
+        ! Exchange up/down
+      call MPI_Irecv (recvbuf_down, (nx + 2 * nghost) * nghost, MPI_REAL, nbr_down, tag_base + 2, cart_comm, reqs(1), ierr)
+      call MPI_Isend (sendbuf_up, (nx + 2 * nghost) * nghost, MPI_REAL, nbr_up, tag_base + 2, cart_comm, reqs(2), ierr)
+      call MPI_Irecv (recvbuf_up, (nx + 2 * nghost) * nghost, MPI_REAL, nbr_up, tag_base + 3, cart_comm, reqs(3), ierr)
+      call MPI_Isend (sendbuf_down, (nx + 2 * nghost) * nghost, MPI_REAL, nbr_down, tag_base + 3, cart_comm, reqs(4), ierr)
+
+      call MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE, ierr)
+
+        ! Unpack down halo
+      if (nbr_down /= MPI_PROC_NULL) then
+        k = 0
+        do j = jps - nghost, jps - 1
+          do i = ips - nghost, ipe + nghost
+            k = k + 1
+            patch(i, j) = recvbuf_down(k)
+          end do
+        end do
+      end if
+
+        ! Unpack up halo
+      if (nbr_up /= MPI_PROC_NULL) then
+        k = 0
+        do j = jpe + 1, jpe + nghost
+          do i = ips - nghost, ipe + nghost
+            k = k + 1
+            patch(i, j) = recvbuf_up(k)
+          end do
+        end do
+      end if
+
+      deallocate (sendbuf_up, recvbuf_down, sendbuf_down, recvbuf_up)
+#endif
+
+    end subroutine Do_halo_exchange_with_corners
 
     subroutine Gather_var2d (nx, ny, ifps, ifpe, jfps, jfpe, var2d_local, var2d_global)
 
