@@ -269,7 +269,7 @@
 
       integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2, INIT_MODE_IDEAL = 3
       type (proj_lc_t) :: proj
-      logical, parameter :: DEBUG_LOCAL = .true.
+      logical, parameter :: DEBUG_LOCAL = .false.
       integer :: ids0, ide0, jds0, jde0, i, j, init_mode, px, py, ntasks, ierr, cart_comm, rank, ips, ipe, jps, jpe
       integer, dimension(2) :: coords
       character (len = 300) :: msg
@@ -302,6 +302,15 @@
             ide0 = geogrid%ifde
             jds0 = geogrid%jfds
             jde0 = geogrid%jfde
+
+#ifdef DM_PARALLEL
+            this%px = 1
+            this%py = 1
+            this%ntasks = 1
+            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
+            this%cart_comm = cart_comm
+#endif
 
             ips = ids0
             ipe = ide0
