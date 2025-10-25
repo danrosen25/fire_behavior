@@ -269,7 +269,7 @@
 
       integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2, INIT_MODE_IDEAL = 3
       type (proj_lc_t) :: proj
-      logical, parameter :: DEBUG_LOCAL = .false.
+      logical, parameter :: DEBUG_LOCAL = .true.
       integer :: ids0, ide0, jds0, jde0, i, j, init_mode, px, py, ntasks, ierr, cart_comm, rank, ips, ipe, jps, jpe
       integer, dimension(2) :: coords
       character (len = 300) :: msg
@@ -905,7 +905,10 @@
 
       character (len = :), allocatable :: file_output
       integer :: rank, ierr
+      logical, parameter :: DEBUG_LOCAL = .false.
 
+
+      if (DEBUG_LOCAL) call Print_message ('Entering Save_state...')
 
 #ifdef DM_PARALLEL
       call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
@@ -914,6 +917,7 @@
       rank = 0
 #endif
 
+      if (DEBUG_LOCAL) call Print_message ('  Creating output file...')
       file_output='fire_output_'//this%datetime_now%datetime//'.nc'
       if (rank == 0) then
         call Create_netcdf_file (file_name = file_output)
@@ -922,6 +926,7 @@
         call Add_netcdf_dim (file_output, NAME_DIM_Y, this%ny)
       end if
 
+      if (DEBUG_LOCAL) call Print_message ('  Saving variables...')
       call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lats', &
           this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
@@ -978,6 +983,8 @@
 
       call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
           this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Save_state...')
 
     end subroutine Save_state
 
