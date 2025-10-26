@@ -120,7 +120,15 @@
 
       real, dimension(nx, ny) :: var2d
       integer :: rank, ierr
+      logical, parameter :: DEBUG_LOCAL = .false.
 
+
+      if (DEBUG_LOCAL) call Print_message ('Entering Add_netcdf_var_real32_2d_mpi...')
+
+      if (DEBUG_LOCAL) call Print_message ('file name = ' // trim (file_name))
+      if (DEBUG_LOCAL) call Print_message ('var name = ' // trim (var_name))
+      if (DEBUG_LOCAL) call Print_message ('dim X name = ' // trim (NAME_DIM_X))
+      if (DEBUG_LOCAL) call Print_message ('dim Y name = ' // trim (NAME_DIM_Y))
 
 #ifdef DM_PARALLEL
       call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
@@ -129,11 +137,13 @@
       call Gather_var2d (nx, ny, ifps, ifpe, jfps, jfpe, var2d_local(ifps:ifpe, jfps:jfpe), var2d)
 
       if (rank == 0) then
-         call Add_netcdf_var (file_name, [NAME_DIM_X, NAME_DIM_Y], var_name, var2d(1:nx, 1:ny))
+        call Add_netcdf_var (file_name, [NAME_DIM_X, NAME_DIM_Y], var_name, var2d(1:nx, 1:ny))
       end if
 #else
-      call Add_netcdf_var (file_name, [NAME_DIM_X, NAME_DIM_X], var_name, var2d_local(1:nx, 1:ny))
+      call Add_netcdf_var (file_name, [NAME_DIM_X, NAME_DIM_Y], var_name, var2d_local(1:nx, 1:ny))
 #endif
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Add_netcdf_var_real32_2d_mpi...')
 
     end subroutine Add_netcdf_var_real32_2d_mpi
 
