@@ -1,11 +1,13 @@
   module mpi_mod
 
+    use, intrinsic :: iso_fortran_env, only : OUTPUT_UNIT
+
     implicit none
 
     private
 
     public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange, Do_halo_exchange_with_corners, &
-        Max_across_mpi_tasks, Sum_across_mpi_tasks
+        Max_across_mpi_tasks, Sum_across_mpi_tasks, Distribute_var2d
 
   contains
 
@@ -74,6 +76,107 @@
       end do
 
     end subroutine Calc_tasks_in_x_and_y
+
+    subroutine Distribute_var2d (local_field, ips, ipe, jps, jpe, comm)
+
+      ! Rank 0 has global_field in local_field and it is distributed across tasks. Rank 0 retains only its part
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+
+      implicit none
+
+      real, dimension(:, :), allocatable, intent(in out) :: local_field
+      integer, intent(in) :: ips, ipe, jps, jpe
+      integer, intent(in) :: comm
+
+      integer :: ierr, rank, nprocs, nx_loc, ny_loc
+      integer, allocatable :: all_ips(:), all_ipe(:), all_jps(:), all_jpe(:)
+      integer, allocatable :: sendcounts(:), displs(:)
+      real, allocatable :: sendbuf(:)
+      integer :: r, i, j, k, kbuf
+      logical :: am_root
+
+      logical, parameter :: DEBUG_LOCAL = .false.
+      real, dimension(:, :) :: allocatable :: tmp
+
+
+      if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) 'Entering Distribute_var2d...'
+
+#ifdef DM_PARALLEL
+      call MPI_Comm_rank (comm, rank, ierr)
+      call MPI_Comm_size (comm, nprocs, ierr)
+
+      am_root = (rank == 0)
+
+      nx_loc = ipe - ips + 1
+      ny_loc = jpe - jps + 1
+
+        ! Gather indices on rank 0
+      if (am_root) then
+        allocate (all_ips(nprocs), all_ipe(nprocs))
+        allocate (all_jps(nprocs), all_jpe(nprocs))
+      end if
+
+      call MPI_Gather(ips, 1, MPI_INTEGER, all_ips, 1, MPI_INTEGER, 0, comm, ierr)
+      call MPI_Gather(ipe, 1, MPI_INTEGER, all_ipe, 1, MPI_INTEGER, 0, comm, ierr)
+      call MPI_Gather(jps, 1, MPI_INTEGER, all_jps, 1, MPI_INTEGER, 0, comm, ierr)
+      call MPI_Gather(jpe, 1, MPI_INTEGER, all_jpe, 1, MPI_INTEGER, 0, comm, ierr)
+
+        ! Rank 0 prepares sendcounts, displacements, and buffer
+      if (am_root) then
+        allocate(sendcounts(nprocs), displs(nprocs))
+
+        do r = 1, nprocs
+          sendcounts(r) = (all_ipe(r) - all_ips(r) + 1) * (all_jpe(r) - all_jps(r) + 1)
+        end do
+
+        displs(1) = 0
+        do r = 2, nprocs
+          displs(r) = displs(r - 1) + sendcounts(r - 1)
+        end do
+
+        allocate(sendbuf(sum(sendcounts)))
+        kbuf = 0
+        do r = 1, nprocs
+          do j = all_jps(r), all_jpe(r)
+            do i = all_ips(r), all_ipe(r)
+              kbuf = kbuf + 1
+              sendbuf(kbuf) = local_field(i - ips + 1, j - jps + 1)
+            end do
+          end do
+        end do
+      end if
+
+      if (.not. am_root) then
+        if (allocated (local_field)) deallocate (local_field)
+        allocate (local_field(nx_loc, ny_loc))
+      end if
+
+        ! Send data to all ranks from rank 0
+      call MPI_Scatterv(sendbuf, sendcounts, displs, MPI_REAL, &
+          local_field, nx_loc*ny_loc, MPI_REAL, 0, comm, ierr)
+
+      if (am_root) then
+        if (allocated (sendbuf)) deallocate (sendbuf)
+        if (allocated (sendcounts)) deallocate (sendcounts)
+        if (allocated (displs)) deallocate (displs)
+        if (allocated (all_ips)) deallocate (all_ips, all_ipe, all_jps, all_jpe)
+
+          ! Shrink local_field to its own subdomain
+          ! Resize local_field (rank 0 keeps its part)
+        if (allocated (local_field)) then
+          allocate (tmp(nx_loc, ny_loc))
+          tmp(:, :) = local_field(ips:ipe, jps:jpe)
+          call move_alloc (tmp, local_field)
+        end if
+      end if
+#endif
+
+      if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) 'Leaving Distribute_var2d...'
+
+    end subroutine Distribute_var2d
 
     subroutine Do_halo_exchange (patch, ims, ime, jms, jme, ips, ipe, jps, jpe, nghost, cart_comm)
 
