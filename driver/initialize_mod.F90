@@ -76,10 +76,16 @@
         call MPI_Bcast(geogrid%map_proj, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         call MPI_Bcast(geogrid%sr_x, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         call MPI_Bcast(geogrid%sr_y, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
         call MPI_Bcast(geogrid%ifds, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         call MPI_Bcast(geogrid%ifde, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         call MPI_Bcast(geogrid%jfds, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         call MPI_Bcast(geogrid%jfde, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+        call MPI_Bcast(geogrid%ids, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%ide, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%jds, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%jde, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 #endif
 
         if (DEBUG_LOCAL) call Print_message ('    Initializing fire state')
