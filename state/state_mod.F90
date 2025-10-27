@@ -275,7 +275,7 @@
       integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2, INIT_MODE_IDEAL = 3
       type (proj_lc_t) :: proj
       logical, parameter :: DEBUG_LOCAL = .false.
-      integer :: ids0, ide0, jds0, jde0, i, j, init_mode, px, py, ntasks, ierr, cart_comm, rank, ips, ipe, jps, jpe
+      integer :: ids0, ide0, jds0, jde0, i, j, init_mode, px, py, ntasks, ierr, cart_comm, rank, ips, ipe, jps, jpe, is_lfn_init_allocated
       integer, dimension(2) :: coords
       character (len = 300) :: msg
 
@@ -333,21 +333,24 @@
 
             call Calc_patch_dims (ide0, jde0, this%px, this%py, coords, ips, ipe, jps, jpe)
 
-              ! Brodcast vars of geogrid from Rank0 to the other tasks
+              ! Distribute global vars of geogrid from Rank0 to the other tasks
             call Distribute_var2d (geogrid%elevations, ips, ipe, jps, jpe, this%cart_comm)
             call Distribute_var2d (geogrid%dz_dxs, ips, ipe, jps, jpe, this%cart_comm)
             call Distribute_var2d (geogrid%dz_dys, ips, ipe, jps, jpe, this%cart_comm)
             call Distribute_var2d (geogrid%fuel_cats, ips, ipe, jps, jpe, this%cart_comm)
-               ! This variable may be present or not
-!            call Distribute_var2d (geogrid%lfn_init, ips, ipe, jps, jpe, this%comm)
 
-  ! atm vars to broadcast from geogrid derived type. May not be needed
-!xlat
-!xlong
-!xlat_c
-!xlong_c
+              ! Distribute lfn_init if available
+           if (rank == 0 .and. allocated (geogrid%lfn_init)) then
+             is_lfn_init_allocated = 1
+           else
+             is_lfn_init_allocated = 0
+           end if
+           call MPI_Bcast(is_lfn_init_allocated, 1, MPI_INTEGER, 0, this%cart_comm, ierr)
+
+           if (is_lfn_init_allocated == 1) call Distribute_var2d (geogrid%lfn_init, ips, ipe, jps, jpe, this%cart_comm)
+
+           ! Other atm vars in geogrid derived type that may not be needed: xlat, xlong, xlat_c, xlong_c
 #else
-
             ips = ids0
             ipe = ide0
             jps = jds0
