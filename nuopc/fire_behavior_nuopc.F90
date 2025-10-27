@@ -446,6 +446,7 @@ module fire_behavior_nuopc
        line=__LINE__, &
        file=__FILE__)) &
        return  ! bail out
+!    print *, 'clb(1), cub(1), clb(2), cub(2)', clb(1), cub(1), clb(2), cub(2)
 
      if (NUOPC_IsConnected(importState, fieldName="mean_prec_rate")) then
        imp_rainrte = .TRUE.
@@ -820,8 +821,8 @@ module fire_behavior_nuopc
       return
     endif
 
-    do j = grid%jfds, grid%jfde
-      do i = grid%ifds, grid%ifde
+    do j = grid%jfps, grid%jfpe
+      do i = grid%ifps, grid%ifpe
         grid%fire_q2(i,j) = max (grid%fire_q2(i,j), .001)
         grid%fire_t2(i,j) = max (grid%fire_t2(i,j), 123.4) ! avoid arithmatic error
         grid%fire_psfc(i,j) = max (grid%fire_psfc(i,j), .001)
@@ -840,8 +841,8 @@ module fire_behavior_nuopc
 
     select case (config_flags%wind_vinterp_opt)
       case (0)
-        do j = 1, grid%jfde
-          do i = 1, grid%ifde
+        do j = grid%jfps, grid%jfpe
+          do i = grid%ifps, grid%ifpe
             call grid%Interpolate_profile (config_flags,  & ! for debug output, <= 0 no output
                 config_flags%fire_wind_height,           & ! interpolation height
                 grid%kfds, grid%kfde,                    & ! fire grid dimensions
@@ -859,8 +860,8 @@ module fire_behavior_nuopc
           enddo
         enddo
       case (1)
-        do j = 1, grid%jfde
-          do i = 1, grid%ifde
+        do j = grid%jfps, grid%jfpe
+          do i = grid%ifps, grid%ifpe
             grid%uf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_u10(i,j) 
             grid%vf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_v10(i,j)
           end do
@@ -895,8 +896,8 @@ module fire_behavior_nuopc
     atm_lowest_q(1:grid%nx,1:grid%ny)    = ptr_lowest_q(clb(1):cub(1),clb(2):cub(2))
     atm_lowest_pres(1:grid%nx,1:grid%ny) = ptr_lowest_pres(clb(1):cub(1),clb(2):cub(2))
 
-    do j = 1, grid%jfde
-      do i = 1, grid%ifde
+    do j = grid%jfps, grid%jfpe
+      do i = grid%ifps, grid%ifpe
         q0   = max(atm_lowest_q(i,j)/(1.-atm_lowest_q(i,j)), 1.e-8)
         rho = atm_lowest_pres(i,j) / (R_D * atm_lowest_t(i,j) * &
             (1.0 + FVIRT * q0))
