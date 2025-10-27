@@ -16,7 +16,7 @@
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
     use wrf_mod, only : wrf_t, G, RERADIUS
-    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims
+    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Distribute_var2d
 
     implicit none
 
@@ -259,7 +259,7 @@
 
       class (state_fire_t), intent(in out) :: this
       type (namelist_t), intent (in) :: config_flags
-      type (geogrid_t), intent (in), optional :: geogrid
+      type (geogrid_t), intent (in out), optional :: geogrid
       integer, intent (in), optional :: ifds, ifde, ifms, ifme, ifps, ifpe, &
                                         jfds, jfde, jfms, jfme, jfps, jfpe, &
                                         kfds, kfde, kfms, kfme, kfps, kfpe, &
@@ -298,24 +298,56 @@
         case (INIT_MODE_GEOGRID, INIT_MODE_IDEAL)
 
           if (init_mode == INIT_MODE_GEOGRID) then
+
             ids0 = geogrid%ifds
             ide0 = geogrid%ifde
             jds0 = geogrid%jfds
             jde0 = geogrid%jfde
 
 #ifdef DM_PARALLEL
-            this%px = 1
-            this%py = 1
-            this%ntasks = 1
+
+            call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
+            this%ntasks = ntasks
+
+            call Calc_tasks_in_x_and_y (this%ntasks, ide0, jde0, px, py)
+            this%px = px
+            this%py = py
+            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', this%px, this%py
+            call Print_message (msg)
+
             call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
             this%cart_comm = cart_comm
-#endif
+
+            call Mpi_comm_rank (this%cart_comm, rank, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+
+            call Mpi_cart_coords (this%cart_comm, rank, N_DIMS, coords, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_coords')
+
+            call Calc_patch_dims (ide0, jde0, this%px, this%py, coords, ips, ipe, jps, jpe)
+
+              ! Brodcast vars of geogrid from Rank0 to the other tasks
+            call Distribute_var2d (geogrid%elevations, ips, ipe, jps, jpe, this%cart_comm)
+            call Distribute_var2d (geogrid%dz_dxs, ips, ipe, jps, jpe, this%cart_comm)
+            call Distribute_var2d (geogrid%dz_dys, ips, ipe, jps, jpe, this%cart_comm)
+            call Distribute_var2d (geogrid%fuel_cats, ips, ipe, jps, jpe, this%cart_comm)
+               ! This variable may be present or not
+!            call Distribute_var2d (geogrid%lfn_init, ips, ipe, jps, jpe, this%comm)
+
+  ! atm vars to broadcast from geogrid derived type. May not be needed
+!xlat
+!xlong
+!xlat_c
+!xlong_c
+#else
 
             ips = ids0
             ipe = ide0
             jps = jds0
             jpe = jde0
+#endif
 
           else if (init_mode == INIT_MODE_IDEAL) then
 
@@ -476,14 +508,14 @@
       if (DEBUG_LOCAL) call Print_message ('  Setting topo and fuels...')
       Set_topo_fuels: select case (init_mode)
         case (INIT_MODE_GEOGRID)
-          this%zsf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%elevations
-          this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dxs
-          this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dys
-          this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%fuel_cats
+          this%zsf(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%elevations
+          this%dzdxf(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%dz_dxs
+          this%dzdyf(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%dz_dys
+          this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%fuel_cats
 
           if (config_flags%fire_is_real_perim) then
             if (allocated (geogrid%lfn_init)) then
-              this%lfn_hist(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%lfn_init
+              this%lfn_hist(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%lfn_init
             else
               Call Stop_simulation ('Attenting to initialize fire from given  perimeter but no initialization data present')
             end if
@@ -572,7 +604,6 @@
       implicit none
 
       class (state_fire_t), intent (in out) :: this
-
       type (namelist_t), intent (in) :: config_flags
 
 
