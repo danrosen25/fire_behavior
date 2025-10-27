@@ -99,7 +99,7 @@
       logical :: am_root
 
       logical, parameter :: DEBUG_LOCAL = .false.
-      real, dimension(:, :) :: allocatable :: tmp
+      real, dimension(:, :), allocatable :: tmp
 
 
       if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) 'Entering Distribute_var2d...'
