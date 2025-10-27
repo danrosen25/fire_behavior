@@ -114,7 +114,7 @@
       ny_loc = jpe - jps + 1
 
         ! Gather indices on rank 0
-      if (am_root) then
+      if (rank == 0) then
         allocate (all_ips(nprocs), all_ipe(nprocs))
         allocate (all_jps(nprocs), all_jpe(nprocs))
       end if
@@ -125,7 +125,7 @@
       call MPI_Gather(jpe, 1, MPI_INTEGER, all_jpe, 1, MPI_INTEGER, 0, comm, ierr)
 
         ! Rank 0 prepares sendcounts, displacements, and buffer
-      if (am_root) then
+      if (rank == 0) then
         allocate(sendcounts(nprocs), displs(nprocs))
 
         do r = 1, nprocs
@@ -147,9 +147,12 @@
             end do
           end do
         end do
+
+        allocate (tmp(nx_loc, ny_loc))
+        tmp(:, :) = local_field(ips:ipe, jps:jpe)
       end if
 
-      if (.not. am_root) then
+      if (rank /= 0) then
         if (allocated (local_field)) deallocate (local_field)
         allocate (local_field(nx_loc, ny_loc))
       end if
@@ -158,19 +161,15 @@
       call MPI_Scatterv(sendbuf, sendcounts, displs, MPI_REAL, &
           local_field, nx_loc*ny_loc, MPI_REAL, 0, comm, ierr)
 
-      if (am_root) then
+      if (rank == 0) then
         if (allocated (sendbuf)) deallocate (sendbuf)
         if (allocated (sendcounts)) deallocate (sendcounts)
         if (allocated (displs)) deallocate (displs)
         if (allocated (all_ips)) deallocate (all_ips, all_ipe, all_jps, all_jpe)
 
-          ! Shrink local_field to its own subdomain
-          ! Resize local_field (rank 0 keeps its part)
-        if (allocated (local_field)) then
-          allocate (tmp(nx_loc, ny_loc))
-          tmp(:, :) = local_field(ips:ipe, jps:jpe)
-          call move_alloc (tmp, local_field)
-        end if
+          ! Going from global to local on Rank0
+        local_field = tmp
+        deallocate (tmp)
       end if
 #endif
 
