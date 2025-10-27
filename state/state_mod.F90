@@ -643,21 +643,8 @@
       allocate (this%lons(this%ifms:this%ifme, this%jfms:this%jfme))
       allocate (this%lats(this%ifms:this%ifme, this%jfms:this%jfme))
 
-!      allocate (this%lons_c(this%ifms:this%ifme, this%jfms:this%jfme))
-!      allocate (this%lats_c(this%ifms:this%ifme, this%jfms:this%jfme))
-
-        ! lats/lons_c have an extra dimension
-      if (this%ifpe == this%ifde) then
-        iend = this%ifpe + 1
-      else
-        iend = this%ifpe
-      end if
-
-      if (this%jfpe == this%jfde) then
-        jend = this%jfpe + 1
-      else
-        jend = this%jfpe
-      end if
+      iend = this%ifpe + 1
+      jend = this%jfpe + 1
 
       allocate (this%lons_c(this%ifps:iend, this%jfps:jend))
       allocate (this%lats_c(this%ifps:iend, this%jfps:jend))
@@ -675,32 +662,27 @@
         end do
       end do
 
-        ! Right hand side of the domain
-      if (this%ifpe == this%ifde) then
-        do j = this%jfps, this%jfpe
-          i_atm = (this%ifde - OFFSET) / sr_x + OFFSET
-          j_atm = (j - OFFSET) / sr_y + OFFSET
-          call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm - offset_corners_y, &
-              lat = this%lats_c(this%ifde + 1, j), lon = this%lons_c(this%ifde + 1, j))
-        end do
-      end if
+        ! Right hand side of the patch
+      do j = this%jfps, this%jfpe
+        i_atm = (this%ifde - OFFSET) / sr_x + OFFSET
+        j_atm = (j - OFFSET) / sr_y + OFFSET
+        call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm - offset_corners_y, &
+            lat = this%lats_c(iend, j), lon = this%lons_c(iend, j))
+      end do
 
-        ! Top of the domain
-      if (this%jfpe == this%jfde) then
-        do i = this%ifps, this%ifpe
-          i_atm = (i - OFFSET) / sr_x + OFFSET
-           j_atm = (this%jfde - OFFSET) / sr_y + OFFSET
-          call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm + offset_corners_y, &
-              lat = this%lats_c(i, this%jfde + 1), lon = this%lons_c(i, this%jfde + 1))
-        end do
-      end if
+        ! Top of the patch
+      do i = this%ifps, this%ifpe
+        i_atm = (i - OFFSET) / sr_x + OFFSET
+         j_atm = (this%jfde - OFFSET) / sr_y + OFFSET
+        call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm + offset_corners_y, &
+            lat = this%lats_c(i, jend), lon = this%lons_c(i, jend))
+      end do
 
-      if (this%ifpe == this%ifde .and. this%jfpe == this%jfde) then
-        i_atm = (this%ifpe - OFFSET) / sr_x + OFFSET
-        j_atm = (this%jfpe - OFFSET) / sr_y + OFFSET
-        call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm + offset_corners_y, &
-            lat = this%lats_c(this%ifpe + 1, this%jfpe + 1), lon = this%lons_c(this%ifpe + 1, this%jfpe + 1))
-      end if
+        ! top right corner
+      i_atm = (this%ifpe - OFFSET) / sr_x + OFFSET
+      j_atm = (this%jfpe - OFFSET) / sr_y + OFFSET
+      call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm + offset_corners_y, &
+          lat = this%lats_c(iend, jend), lon = this%lons_c(iend, jend))
 
     end subroutine Init_latlons
 
