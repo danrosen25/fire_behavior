@@ -2,6 +2,8 @@
 
     use netcdf_mod, only : Get_netcdf_var, Get_netcdf_att, Get_netcdf_dim, Is_netcdf_file_present, Is_netcdf_var_present
     use proj_lc_mod, only : proj_lc_t
+    use stderrout_mod, only: Print_message
+
 
     implicit none
 
@@ -124,15 +126,35 @@
 
     function Get_atm_proj (this) result (return_value)
 
+      use, intrinsic :: iso_fortran_env, only : OUTPUT_UNIT
+
       implicit none
 
       class (geogrid_t), intent (in) :: this
       type (proj_lc_t) :: return_value
 
+      logical, parameter :: DEBUG_LOCAL = .false.
+
+
+      if (DEBUG_LOCAL) call Print_message ('Entering Get_atm_proj')
+
+      if (DEBUG_LOCAL) then
+        write (OUTPUT_UNIT, *) 'cen_lat = ', this%cen_lat
+        write (OUTPUT_UNIT, *) 'cen_lon = ', this%cen_lon
+        write (OUTPUT_UNIT, *) 'dx = ', this%dx
+        write (OUTPUT_UNIT, *) 'dy = ', this%dy
+        write (OUTPUT_UNIT, *) 'stand_lon = ', this%stand_lon
+        write (OUTPUT_UNIT, *) 'true_lat_1 = ', this%true_lat_1
+        write (OUTPUT_UNIT, *) 'true_lat_2 = ', this%true_lat_2
+        write (OUTPUT_UNIT, *) 'nx = ', this%ide - 1
+        write (OUTPUT_UNIT, *) 'ny = ', this%jde - 1
+      end if
 
       return_value = proj_lc_t (cen_lat = this%cen_lat , cen_lon = this%cen_lon, &
           dx = this%dx, dy = this%dy, standard_lon = this%stand_lon, true_lat_1 = this%true_lat_1, &
           true_lat_2 = this%true_lat_2, nx = this%ide - 1, ny = this%jde - 1)
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Get_atm_proj')
 
     end function Get_atm_proj
 
