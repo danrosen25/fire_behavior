@@ -62,9 +62,9 @@
         rank = 0
 #endif
 
-#ifdef DM_PARALLEL
         if (rank == 0) geogrid = geogrid_t (file_name = 'geo_em.d01.nc')
 
+#ifdef DM_PARALLEL
         call MPI_Bcast (geogrid%cen_lon, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
         call MPI_Bcast (geogrid%cen_lat, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
         call MPI_Bcast (geogrid%dx, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
