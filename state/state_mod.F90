@@ -1,5 +1,8 @@
   module state_mod
 
+#ifdef DM_PARALLEL
+    use mpi
+#endif
     use constants_mod, only : PI
     use datetime_mod, only : datetime_t
     use fmc_mod, only : fmc_t
@@ -7,20 +10,23 @@
     use geogrid_mod, only : geogrid_t
     use ignition_line_mod, only : ignition_line_t
     use namelist_mod, only : namelist_t
-    use netcdf_mod, only : Create_netcdf_file, Add_netcdf_dim, Add_netcdf_var
+    use netcdf_mod, only : Create_netcdf_file, Add_netcdf_dim, Add_netcdf_var, Add_netcdf_var_mpi, NAME_DIM_X, NAME_DIM_Y
     use proj_lc_mod, only : proj_lc_t
     use ros_mod, only : ros_t
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
     use wrf_mod, only : wrf_t, G, RERADIUS
+    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Distribute_var2d
 
     implicit none
 
     private
 
-    public :: state_fire_t
+    public :: state_fire_t, N_POINTS_IN_HALO
 
-    integer, parameter :: N_POINTS_IN_HALO = 5
+    integer, parameter :: N_POINTS_IN_HALO = 5, N_DIMS = 2
+    logical, dimension(2), parameter :: PERIODS = [ .false., .false. ]
+    logical, parameter :: REORDER = .true. ! Allow MPI recording tasks for performance
 
     type :: state_fire_t
       integer :: ifds, ifde, jfds, jfde, kfds, kfde, ifms, ifme, jfms, jfme, kfms, kfme, &
@@ -91,6 +97,11 @@
       integer :: nx ! "number of longitudinal grid points" "1"
       integer :: ny ! "number of latitudinal grid points" "1"
       real :: cen_lat, cen_lon
+
+        ! For MPI tasks
+      integer :: cart_comm ! The MPI communicator with the domain decomposition
+      integer :: ntasks ! Number of MPI tasks
+      integer :: px, py ! Number of MPI tasks in X and Y, respectively
     contains
       procedure, public :: Allocate_vars => Allocate_vars
       procedure, public :: Convert_sb_to_ander => Convert_scottburgan_to_anderson
@@ -218,20 +229,25 @@
       type (namelist_t), intent (in) :: config_flags
       type (wrf_t), intent (in out) :: wrf
 
-      logical, parameter :: DEBUG_LOCAL = .true.
+      logical, parameter :: DEBUG_LOCAL = .false.
 
+
+      if (DEBUG_LOCAL) call Print_message ('Entering Handle_wrfdata_update...')
 
       If_update_atm: if (this%datetime_now == this%datetime_next_atm_update) then
-        if (DEBUG_LOCAL) call Print_message ('Updating wrfdata...')
+        if (DEBUG_LOCAL) call Print_message ('  Updating WRF atm state...')
         if (DEBUG_LOCAL) call this%datetime_now%Print_datetime ()
 
         call wrf%Update_atm_state (this%datetime_now)
 
+        if (DEBUG_LOCAL) call Print_message ('  Interpolating WRF vars...')
         call this%interpolate_vars_atm_to_fire(wrf, config_flags)
 
         call this%datetime_next_atm_update%Add_seconds (config_flags%interval_atm)
 
       end if If_update_atm
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Handle_wrfdata_update...')
 
     end subroutine Handle_wrfdata_update
 
@@ -248,7 +264,7 @@
 
       class (state_fire_t), intent(in out) :: this
       type (namelist_t), intent (in) :: config_flags
-      type (geogrid_t), intent (in), optional :: geogrid
+      type (geogrid_t), intent (in out), optional :: geogrid
       integer, intent (in), optional :: ifds, ifde, ifms, ifme, ifps, ifpe, &
                                         jfds, jfde, jfms, jfme, jfps, jfpe, &
                                         kfds, kfde, kfms, kfme, kfps, kfpe, &
@@ -259,8 +275,12 @@
       integer, parameter :: INIT_MODE_NONE = 0, INIT_MODE_GEOGRID = 1, INIT_MODE_WRF = 2, INIT_MODE_IDEAL = 3
       type (proj_lc_t) :: proj
       logical, parameter :: DEBUG_LOCAL = .false.
-      integer :: ids0, ide0, jds0, jde0, i, j, init_mode
+      integer :: ids0, ide0, jds0, jde0, i, j, init_mode, px, py, ntasks, ierr, cart_comm, rank, ips, ipe, jps, jpe, is_lfn_init_allocated
+      integer, dimension(2) :: coords
+      character (len = 300) :: msg
 
+
+      if (DEBUG_LOCAL) call Print_message ('Entering Init_domain...')
 
       init_mode = INIT_MODE_NONE
       if (config_flags%ideal_opt == 1) init_mode = INIT_MODE_IDEAL
@@ -278,33 +298,116 @@
           call Stop_simulation ('Not enough information to initialize domain')
 
         ! Set dimensions
+      if (DEBUG_LOCAL) call Print_message ('  Setting dimensions...')
       Set_dims: select case (init_mode)
         case (INIT_MODE_GEOGRID, INIT_MODE_IDEAL)
+
           if (init_mode == INIT_MODE_GEOGRID) then
+
             ids0 = geogrid%ifds
             ide0 = geogrid%ifde
             jds0 = geogrid%jfds
             jde0 = geogrid%jfde
+
+#ifdef DM_PARALLEL
+
+            call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
+            this%ntasks = ntasks
+
+            call Calc_tasks_in_x_and_y (this%ntasks, ide0, jde0, px, py)
+            this%px = px
+            this%py = py
+            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', this%px, this%py
+            call Print_message (msg)
+
+            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
+            this%cart_comm = cart_comm
+
+            call Mpi_comm_rank (this%cart_comm, rank, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+
+            call Mpi_cart_coords (this%cart_comm, rank, N_DIMS, coords, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_coords')
+
+            call Calc_patch_dims (ide0, jde0, this%px, this%py, coords, ips, ipe, jps, jpe)
+
+              ! Distribute global vars of geogrid from Rank0 to the other tasks
+            call Distribute_var2d (geogrid%elevations, ips, ipe, jps, jpe, this%cart_comm)
+            call Distribute_var2d (geogrid%dz_dxs, ips, ipe, jps, jpe, this%cart_comm)
+            call Distribute_var2d (geogrid%dz_dys, ips, ipe, jps, jpe, this%cart_comm)
+            call Distribute_var2d (geogrid%fuel_cats, ips, ipe, jps, jpe, this%cart_comm)
+
+              ! Distribute lfn_init if available
+           if (rank == 0 .and. allocated (geogrid%lfn_init)) then
+             is_lfn_init_allocated = 1
+           else
+             is_lfn_init_allocated = 0
+           end if
+           call MPI_Bcast(is_lfn_init_allocated, 1, MPI_INTEGER, 0, this%cart_comm, ierr)
+
+           if (is_lfn_init_allocated == 1) call Distribute_var2d (geogrid%lfn_init, ips, ipe, jps, jpe, this%cart_comm)
+
+           ! Other atm vars in geogrid derived type that may not be needed: xlat, xlong, xlat_c, xlong_c
+#else
+            ips = ids0
+            ipe = ide0
+            jps = jds0
+            jpe = jde0
+#endif
+
           else if (init_mode == INIT_MODE_IDEAL) then
+
             ids0 = 1
             ide0 = config_flags%nx
             jds0 = 1
             jde0 = config_flags%ny
+
+#ifdef DM_PARALLEL
+            call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
+            this%ntasks = ntasks
+
+            call Calc_tasks_in_x_and_y (this%ntasks, config_flags%nx, config_flags%ny, px, py)
+            this%px = px
+            this%py = py
+            write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', this%px, this%py
+            call Print_message (msg)
+
+            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
+            this%cart_comm = cart_comm
+
+            call Mpi_comm_rank (this%cart_comm, rank, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+
+            call Mpi_cart_coords (this%cart_comm, rank, N_DIMS, coords, ierr)
+            if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_coords')
+
+            call Calc_patch_dims (config_flags%nx, config_flags%ny, this%px, this%py, coords, ips, ipe, jps, jpe)
+
+#else
+            ips = ids0
+            ipe = ide0
+            jps = jds0
+            jpe = jde0
+#endif
           end if 
 
           this%ifds = ids0
           this%ifde = ide0
-          this%ifms = ids0 - N_POINTS_IN_HALO
-          this%ifme = ide0 + N_POINTS_IN_HALO
-          this%ifps = ids0
-          this%ifpe = ide0
+          this%ifms = ips - N_POINTS_IN_HALO
+          this%ifme = ipe + N_POINTS_IN_HALO
+          this%ifps = ips
+          this%ifpe = ipe
 
           this%jfds = jds0
           this%jfde = jde0
-          this%jfms = jds0 - N_POINTS_IN_HALO
-          this%jfme = jde0 + N_POINTS_IN_HALO
-          this%jfps = jds0
-          this%jfpe = jde0
+          this%jfms = jps - N_POINTS_IN_HALO
+          this%jfme = jpe + N_POINTS_IN_HALO
+          this%jfps = jps
+          this%jfpe = jpe
 
           this%kfds = config_flags%kds
           this%kfde = config_flags%kde
@@ -349,6 +452,10 @@
 
       end select Set_dims
 
+      write (msg, '(a11, 4(a4, i7))') &
+          'CFBM Patch:', ' IPS', this%ifps, ' IPE', this%ifpe, ' JPS', this%jfps, ' JPE', this%jfpe
+      call Print_message (msg)
+
       call this%Print_tiles ()
 
       this%nx = this%ifde
@@ -356,9 +463,11 @@
       this%dt = config_flags%dt
 
         ! Init memory
+      if (DEBUG_LOCAL) call Print_message ('  Allocating memory...')
       call this%Allocate_vars (this%ifms, this%ifme, this%jfms, this%jfme)
 
         ! Set projection
+      if (DEBUG_LOCAL) call Print_message ('  Setting projection...')
       Set_proj: select case (init_mode)
         case (INIT_MODE_GEOGRID)
           proj = geogrid%Get_atm_proj ()
@@ -401,18 +510,20 @@
       this%proj = proj
 
         ! Init vars
+      if (DEBUG_LOCAL) call Print_message ('  Initializing default variables...')
       call this%Set_vars_to_default (config_flags)
 
+      if (DEBUG_LOCAL) call Print_message ('  Setting topo and fuels...')
       Set_topo_fuels: select case (init_mode)
         case (INIT_MODE_GEOGRID)
-          this%zsf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%elevations
-          this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dxs
-          this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%dz_dys
-          this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%fuel_cats
+          this%zsf(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%elevations
+          this%dzdxf(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%dz_dxs
+          this%dzdyf(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%dz_dys
+          this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%fuel_cats
 
           if (config_flags%fire_is_real_perim) then
             if (allocated (geogrid%lfn_init)) then
-              this%lfn_hist(this%ifds:this%ifde, this%jfds:this%jfde) = geogrid%lfn_init
+              this%lfn_hist(this%ifps:this%ifpe, this%jfps:this%jfpe) = geogrid%lfn_init
             else
               Call Stop_simulation ('Attenting to initialize fire from given  perimeter but no initialization data present')
             end if
@@ -428,16 +539,16 @@
               call Stop_simulation ('Not ready to initialize from fire perimeter inside WRF')
 
         case (INIT_MODE_IDEAL)
-          do j = this%jfds, this%jfde
-            do i = this%ifds, this%ifde
+          do j = this%jfps, this%jfpe
+            do i = this%ifps, this%ifpe
               this%zsf(i, j) = config_flags%elevation + &
                                (i - this%ifds) * config_flags%dz_dx * config_flags%dx + &
                                (j - this%jfds) * config_flags%dz_dy * config_flags%dy
             end do
           end do
-          this%dzdxf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dx
-          this%dzdyf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%dz_dy
-          this%nfuel_cat(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%fuel_cat
+          this%dzdxf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%dz_dx
+          this%dzdyf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%dz_dy
+          this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%fuel_cat
 
           if (config_flags%fire_is_real_perim) &
               call Stop_simulation ('Not ready to initialize from fire perimeter in idealized mode')
@@ -450,9 +561,12 @@
       if (config_flags%fuel_opt == FUEL_ANDERSON) call this%Convert_sb_to_ander ()
 
         ! Set clock
+      if (DEBUG_LOCAL) call Print_message ('  Setting clock...')
       call this%Set_time_stamps (config_flags)
 
       if (DEBUG_LOCAL) call this%Print()
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Init_domain...')
 
     end subroutine Init_domain
 
@@ -498,7 +612,6 @@
       implicit none
 
       class (state_fire_t), intent (in out) :: this
-
       type (namelist_t), intent (in) :: config_flags
 
 
@@ -515,7 +628,7 @@
       integer, optional :: srx, sry
 
       real, parameter :: OFFSET = 0.5
-      integer :: i, j, sr_x, sr_y
+      integer :: i, j, sr_x, sr_y, iend, jend
       real :: i_atm, j_atm, offset_corners_x, offset_corners_y
 
 
@@ -529,14 +642,18 @@
 
       allocate (this%lons(this%ifms:this%ifme, this%jfms:this%jfme))
       allocate (this%lats(this%ifms:this%ifme, this%jfms:this%jfme))
-      allocate (this%lons_c(this%nx + 1, this%ny + 1))
-      allocate (this%lats_c(this%nx + 1, this%ny + 1))
+
+      iend = this%ifpe + 1
+      jend = this%jfpe + 1
+
+      allocate (this%lons_c(this%ifps:iend, this%jfps:jend))
+      allocate (this%lats_c(this%ifps:iend, this%jfps:jend))
 
       offset_corners_x = (1.0 / real (sr_x)) / 2.0
       offset_corners_y = (1.0 / real (sr_y)) / 2.0
 
-      do j = 1, this%ny
-        do i = 1, this%nx
+      do j = this%jfps, this%jfpe
+        do i = this%ifps, this%ifpe
           i_atm = (i - OFFSET) / sr_x + OFFSET
           j_atm = (j - OFFSET) / sr_y + OFFSET
           call proj%Calc_latlon (i = i_atm, j = j_atm, lat = this%lats(i, j), lon = this%lons(i, j))
@@ -545,24 +662,27 @@
         end do
       end do
 
-      do j = 1, this%ny
-        i_atm = (this%nx - OFFSET) / sr_x + OFFSET
+        ! Right hand side of the patch
+      do j = this%jfps, this%jfpe
+        i_atm = (this%ifde - OFFSET) / sr_x + OFFSET
         j_atm = (j - OFFSET) / sr_y + OFFSET
         call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm - offset_corners_y, &
-            lat = this%lats_c(this%nx + 1, j), lon = this%lons_c(this%nx + 1, j))
+            lat = this%lats_c(iend, j), lon = this%lons_c(iend, j))
       end do
 
-      do i = 1, this%nx
+        ! Top of the patch
+      do i = this%ifps, this%ifpe
         i_atm = (i - OFFSET) / sr_x + OFFSET
-        j_atm = (this%ny - OFFSET) / sr_y + OFFSET
+         j_atm = (this%jfde - OFFSET) / sr_y + OFFSET
         call proj%Calc_latlon (i = i_atm - offset_corners_x, j = j_atm + offset_corners_y, &
-            lat = this%lats_c(i, this%ny + 1), lon = this%lons_c(i, this%ny + 1))
+            lat = this%lats_c(i, jend), lon = this%lons_c(i, jend))
       end do
 
-      i_atm = (this%nx - OFFSET) / sr_x + OFFSET
-      j_atm = (this%ny - OFFSET) / sr_y + OFFSET
+        ! top right corner
+      i_atm = (this%ifpe - OFFSET) / sr_x + OFFSET
+      j_atm = (this%jfpe - OFFSET) / sr_y + OFFSET
       call proj%Calc_latlon (i = i_atm + offset_corners_x, j = j_atm + offset_corners_y, &
-          lat = this%lats_c(this%nx + 1, this%ny + 1), lon = this%lons_c(this%nx + 1, this%ny + 1))
+          lat = this%lats_c(iend, jend), lon = this%lons_c(iend, jend))
 
     end subroutine Init_latlons
 
@@ -620,54 +740,53 @@
 
       implicit none
 
-      class (state_fire_t), intent(in out) :: this    ! fire state
-      type (wrf_t), intent(inout) :: wrf                 ! atm state
+      class (state_fire_t), intent(in out) :: this
+      type (wrf_t), intent(inout) :: wrf
       type (namelist_t), intent (in) :: config_flags
 
       real, dimension(:, :), allocatable :: var2d
       integer :: i, j
 
 
-          ! Alternative interpolation in testing mode (no impact on the fire evolution)
-          ! We need the fire grid lat/lon
+        ! We need the fire grid lat/lon
       if (allocated (this%lats) .and. allocated (this%lons)) then
 
         If_start: if (this%datetime_now == this%datetime_start) then
-          call wrf%interp_var2grid_nearest (this%lats(this%ifds:this%ifde, this%jfds:this%jfde), &
-              this%lons(this%ifds:this%ifde, this%jfds:this%jfde), 'fz0', var2d)
-              this%fz0(this%ifds:this%ifde, this%jfds:this%jfde) = var2d
+          call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+              this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'fz0', var2d)
+              this%fz0(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
         endif If_start
 
         do j = 1, wrf%jde
           do i = 1, wrf%ide
-            call this%interpolate_profile (config_flags, config_flags%fire_wind_height, this%kfds, this%kfde, &
+            call this%Interpolate_profile (config_flags, config_flags%fire_wind_height, this%kfds, this%kfde, &
                 wrf%u3d_stag(i,:,j),wrf%v3d_stag(i,:,j), wrf%phl_stag(i,:,j), wrf%ua(i,j),wrf%va(i,j),wrf%z0_stag(i,j))
           end do
         end do
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifds:this%ifde, this%jfds:this%jfde), &
-            this%lons(this%ifds:this%ifde, this%jfds:this%jfde), 'uf', var2d)
-            this%uf(this%ifds:this%ifde, this%jfds:this%jfde) = var2d
+        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'uf', var2d)
+            this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifds:this%ifde, this%jfds:this%jfde), &
-            this%lons(this%ifds:this%ifde, this%jfds:this%jfde), 'vf', var2d)
-            this%vf(this%ifds:this%ifde, this%jfds:this%jfde) = var2d
+        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'vf', var2d)
+            this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifds:this%ifde, this%jfds:this%jfde), &
-            this%lons(this%ifds:this%ifde, this%jfds:this%jfde), 't2', var2d)
-            this%fire_t2(this%ifds:this%ifde, this%jfds:this%jfde) = var2d
+        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 't2', var2d)
+            this%fire_t2(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifds:this%ifde, this%jfds:this%jfde), &
-            this%lons(this%ifds:this%ifde, this%jfds:this%jfde), 'q2', var2d)
-            this%fire_q2(this%ifds:this%ifde, this%jfds:this%jfde) = var2d
+        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'q2', var2d)
+            this%fire_q2(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifds:this%ifde, this%jfds:this%jfde), &
-            this%lons(this%ifds:this%ifde, this%jfds:this%jfde), 'psfc', var2d)
-            this%fire_psfc(this%ifds:this%ifde, this%jfds:this%jfde) = var2d
+        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'psfc', var2d)
+            this%fire_psfc(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifds:this%ifde, this%jfds:this%jfde), &
-            this%lons(this%ifds:this%ifde, this%jfds:this%jfde), 'rain', var2d)
-            this%fire_rain(this%ifds:this%ifde, this%jfds:this%jfde) = var2d
+        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'rain', var2d)
+            this%fire_rain(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
         deallocate (var2d)
       end if
@@ -781,8 +900,8 @@
       write (OUTPUT_UNIT, *) 'jfms = ', this%jfms, 'jfme = ', this%jfme
       write (OUTPUT_UNIT, *) 'kfms = ', this%kfms, 'kfme = ', this%kfme
 
-      write (OUTPUT_UNIT, *) 'ifts = ', this%ifts, 'ifte = ', this%ifte
-      write (OUTPUT_UNIT, *) 'jfts = ', this%jfts, 'jfte = ', this%jfte
+!      write (OUTPUT_UNIT, *) 'ifts = ', this%ifts, 'ifte = ', this%ifte
+!      write (OUTPUT_UNIT, *) 'jfts = ', this%jfts, 'jfte = ', this%jfte
       write (OUTPUT_UNIT, *) 'kfts = ', this%kfts, 'kfte = ', this%kfte
 
       write (OUTPUT_UNIT, *) ''
@@ -814,34 +933,87 @@
       class (state_fire_t), intent (in) :: this
 
       character (len = :), allocatable :: file_output
+      integer :: rank, ierr
+      logical, parameter :: DEBUG_LOCAL = .false.
 
 
+      if (DEBUG_LOCAL) call Print_message ('Entering Save_state...')
+
+#ifdef DM_PARALLEL
+      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+      if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
+#else
+      rank = 0
+#endif
+
+      if (DEBUG_LOCAL) call Print_message ('  Creating output file...')
       file_output='fire_output_'//this%datetime_now%datetime//'.nc'
+      if (rank == 0) then
+        call Create_netcdf_file (file_name = file_output)
 
-      call Create_netcdf_file (file_name = file_output)
+        call Add_netcdf_dim (file_output, NAME_DIM_X, this%nx)
+        call Add_netcdf_dim (file_output, NAME_DIM_Y, this%ny)
+      end if
 
-      call Add_netcdf_dim (file_output, 'nx', this%nx)
-      call Add_netcdf_dim (file_output, 'ny', this%ny)
+      if (DEBUG_LOCAL) call Print_message ('  Saving variables...')
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lats', &
+          this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'lats', this%lats(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'lons', this%lons(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fgrnhfx', this%fgrnhfx(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fgrnqfx', this%fgrnqfx(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_area', this%fire_area(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fuel_frac_burnt_dt', this%fuel_frac_burnt_dt(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fuel_frac', this%fuel_frac(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'emis_smoke', this%emis_smoke(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_t2', this%fire_t2(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_q2', this%fire_q2(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_psfc', this%fire_psfc(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fire_rain', this%fire_rain(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fz0', this%fz0(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'fmc_g', this%fmc_g(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'uf', this%uf(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'vf', this%vf(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'zsf', this%zsf(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'lfn', this%lfn(1:this%nx, 1:this%ny))
-      call Add_netcdf_var (file_output, ['nx', 'ny'], 'nfuel_cat', this%nfuel_cat(1:this%nx, 1:this%ny))
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lons', &
+          this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnhfx', &
+          this%fgrnhfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnqfx', &
+          this%fgrnqfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_area', &
+          this%fire_area(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac_burnt_dt', &
+          this%fuel_frac_burnt_dt(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac', &
+          this%fuel_frac(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'emis_smoke', &
+          this%emis_smoke(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_t2', &
+          this%fire_t2(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_q2', &
+          this%fire_q2(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_psfc', &
+          this%fire_psfc(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_rain', &
+          this%fire_rain(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
+          this%fz0(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fmc_g', &
+          this%fmc_g(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', &
+          this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', &
+          this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'zsf', &
+          this%zsf(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lfn', &
+          this%lfn(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
+          this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Save_state...')
 
     end subroutine Save_state
 
@@ -875,21 +1047,21 @@
 
 
       if (config_flags%ideal_opt == 1) then
-        this%uf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%zonal_wind
-        this%vf(this%ifds:this%ifde, this%jfds:this%jfde) = config_flags%meridional_wind
+        this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%zonal_wind
+        this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe) = config_flags%meridional_wind
       else
         this%uf = 0.0
         this%vf = 0.0
       end if
       this%fmc_g = config_flags%fuelmc_g
         ! Init lfn more than the largest domain side
-      this%lfn(this%ifds:this%ifde, this%jfds:this%jfde) = 2.0 * &
+      this%lfn(this%ifps:this%ifpe, this%jfps:this%jfpe) = 2.0 * &
           max ((this%ifde - this%ifds + 1) * this%dx, (this%jfde - this%jfds + 1) * this%dy)
         ! Init tign_g a bit into the future
       this%tign_g(this%ifps:this%ifpe, this%jfps:this%jfpe) = epsilon (this%tign_g)
 
-      this%fuel_frac(this%ifds:this%ifde, this%jfds:this%jfde) = 1.0
-      this%fire_area(this%ifds:this%ifde, this%jfds:this%jfde) = 0.0
+      this%fuel_frac(this%ifps:this%ifpe, this%jfps:this%jfpe) = 1.0
+      this%fire_area(this%ifps:this%ifpe, this%jfps:this%jfpe) = 0.0
 
       this%emis_smoke = 0.0
 

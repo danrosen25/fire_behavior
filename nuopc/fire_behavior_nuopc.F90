@@ -3,6 +3,10 @@
 
 module fire_behavior_nuopc
 
+#ifdef DM_PARALLEL
+  use mpi
+#endif
+
   use ESMF
   use NUOPC
   use NUOPC_Model, &
@@ -95,6 +99,7 @@ module fire_behavior_nuopc
 
     ! local variables
     type(ESMF_State)        :: importState, exportState
+    integer :: rank, ierr
 
     rc = ESMF_SUCCESS
 
@@ -107,7 +112,18 @@ module fire_behavior_nuopc
       return  ! bail out
 
       ! Read namelist
-    call config_flags%Initialization (file_name = 'namelist.fire')
+#ifdef DM_PARALLEL
+    call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+    if (ierr /= MPI_SUCCESS) call Stop_simulation ('ERROR: mpi_comm_rank failed')
+#else
+    rank = 0
+#endif
+
+    if (rank == 0) call config_flags%Initialization (file_name = 'namelist.fire')
+
+#ifdef DM_PARALLEL
+    call config_flags%Broadcast_nml ()
+#endif
 
     call Init_fire_state (grid, config_flags)
 
@@ -430,6 +446,7 @@ module fire_behavior_nuopc
        line=__LINE__, &
        file=__FILE__)) &
        return  ! bail out
+!    print *, 'clb(1), cub(1), clb(2), cub(2)', clb(1), cub(1), clb(2), cub(2)
 
      if (NUOPC_IsConnected(importState, fieldName="mean_prec_rate")) then
        imp_rainrte = .TRUE.
@@ -788,15 +805,16 @@ module fire_behavior_nuopc
 #ifdef WITHIMPORTFIELDS
     ! Update atmospheric fields
     ! convert cm to m
-    grid%fz0(1:grid%nx,1:grid%ny) = ptr_z0(clb(1):cub(1),clb(2):cub(2)) * 0.01
-    grid%fire_q2(1:grid%nx,1:grid%ny) = ptr_q2(clb(1):cub(1),clb(2):cub(2))
-    grid%fire_t2(1:grid%nx,1:grid%ny) = ptr_t2(clb(1):cub(1),clb(2):cub(2))
-    grid%fire_psfc(1:grid%nx,1:grid%ny) = ptr_psfc(clb(1):cub(1),clb(2):cub(2))
+    grid%fz0(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe) = ptr_z0(clb(1):cub(1),clb(2):cub(2)) * 0.01
+    grid%fire_q2(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe) = ptr_q2(clb(1):cub(1),clb(2):cub(2))
+    grid%fire_t2(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe) = ptr_t2(clb(1):cub(1),clb(2):cub(2))
+    grid%fire_psfc(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe) = ptr_psfc(clb(1):cub(1),clb(2):cub(2))
     if (imp_rainrte) then
       ! convert m s-1 to m and accumulate
-      grid%fire_rain(1:grid%nx,1:grid%ny) = grid%fire_rain(1:grid%nx,1:grid%ny) + ( ptr_rainrte(clb(1):cub(1),clb(2):cub(2)) * ts )
+      grid%fire_rain(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe) = grid%fire_rain(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe) + &
+          ( ptr_rainrte(clb(1):cub(1),clb(2):cub(2)) * ts )
     elseif (imp_rainacc) then
-      grid%fire_rain(1:grid%nx,1:grid%ny) = ptr_rainacc(clb(1):cub(1),clb(2):cub(2))
+      grid%fire_rain(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe) = ptr_rainacc(clb(1):cub(1),clb(2):cub(2))
     else
       call ESMF_LogSetError(ESMF_RC_NOT_IMPL, &
         msg="missing rainfall import", &
@@ -804,28 +822,28 @@ module fire_behavior_nuopc
       return
     endif
 
-    do j = grid%jfds, grid%jfde
-      do i = grid%ifds, grid%ifde
+    do j = grid%jfps, grid%jfpe
+      do i = grid%ifps, grid%ifpe
         grid%fire_q2(i,j) = max (grid%fire_q2(i,j), .001)
         grid%fire_t2(i,j) = max (grid%fire_t2(i,j), 123.4) ! avoid arithmatic error
         grid%fire_psfc(i,j) = max (grid%fire_psfc(i,j), .001)
       end do
     end do
 
-    allocate (atm_u3d(1:grid%nx,1:grid%ny,1:grid%kfde - 1))
-    allocate (atm_v3d(1:grid%nx,1:grid%ny,1:grid%kfde - 1))
-    allocate (atm_ph(1:grid%nx,1:grid%ny,1:grid%kfde - 1))
+    allocate (atm_u3d(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe, 1:grid%kfde - 1))
+    allocate (atm_v3d(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe, 1:grid%kfde - 1))
+    allocate (atm_ph(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe, 1:grid%kfde - 1))
 
-    atm_u3d(1:grid%nx,1:grid%ny,1:grid%kfde - 1)  = ptr_u3d(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))
-    atm_v3d(1:grid%nx,1:grid%ny,1:grid%kfde - 1)  = ptr_v3d(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))
-    atm_ph(1:grid%nx,1:grid%ny,1:grid%kfde - 1)   = ptr_ph(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))
+    atm_u3d(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe, 1:grid%kfde - 1)  = ptr_u3d(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))
+    atm_v3d(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe, 1:grid%kfde - 1)  = ptr_v3d(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))
+    atm_ph(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe, 1:grid%kfde - 1)   = ptr_ph(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))
 
 #endif
 
     select case (config_flags%wind_vinterp_opt)
       case (0)
-        do j = 1, grid%jfde
-          do i = 1, grid%ifde
+        do j = grid%jfps, grid%jfpe
+          do i = grid%ifps, grid%ifpe
             call grid%Interpolate_profile (config_flags,  & ! for debug output, <= 0 no output
                 config_flags%fire_wind_height,           & ! interpolation height
                 grid%kfds, grid%kfde,                    & ! fire grid dimensions
@@ -843,8 +861,8 @@ module fire_behavior_nuopc
           enddo
         enddo
       case (1)
-        do j = 1, grid%jfde
-          do i = 1, grid%ifde
+        do j = grid%jfps, grid%jfpe
+          do i = grid%ifps, grid%ifpe
             grid%uf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_u10(i,j) 
             grid%vf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_v10(i,j)
           end do
@@ -868,19 +886,19 @@ module fire_behavior_nuopc
 
     call Advance_state (grid, config_flags)
 
-    allocate (grnhfx_kinematic(1:grid%nx,1:grid%ny))
-    allocate (grnqfx_kinematic(1:grid%nx,1:grid%ny))
-    allocate (smoke(1:grid%nx,1:grid%ny))
-    allocate (atm_lowest_t(1:grid%nx,1:grid%ny))
-    allocate (atm_lowest_q(1:grid%nx,1:grid%ny))
-    allocate (atm_lowest_pres(1:grid%nx,1:grid%ny))
+    allocate (grnhfx_kinematic(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe))
+    allocate (grnqfx_kinematic(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe))
+    allocate (smoke(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe))
+    allocate (atm_lowest_t(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe))
+    allocate (atm_lowest_q(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe))
+    allocate (atm_lowest_pres(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe))
 
-    atm_lowest_t(1:grid%nx,1:grid%ny)    = ptr_lowest_t(clb(1):cub(1),clb(2):cub(2))
-    atm_lowest_q(1:grid%nx,1:grid%ny)    = ptr_lowest_q(clb(1):cub(1),clb(2):cub(2))
-    atm_lowest_pres(1:grid%nx,1:grid%ny) = ptr_lowest_pres(clb(1):cub(1),clb(2):cub(2))
+    atm_lowest_t(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe)    = ptr_lowest_t(clb(1):cub(1),clb(2):cub(2))
+    atm_lowest_q(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe)    = ptr_lowest_q(clb(1):cub(1),clb(2):cub(2))
+    atm_lowest_pres(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe) = ptr_lowest_pres(clb(1):cub(1),clb(2):cub(2))
 
-    do j = 1, grid%jfde
-      do i = 1, grid%ifde
+    do j = grid%jfps, grid%jfpe
+      do i = grid%ifps, grid%ifpe
         q0   = max(atm_lowest_q(i,j)/(1.-atm_lowest_q(i,j)), 1.e-8)
         rho = atm_lowest_pres(i,j) / (R_D * atm_lowest_t(i,j) * &
             (1.0 + FVIRT * q0))
@@ -898,11 +916,11 @@ module fire_behavior_nuopc
     deallocate (atm_u3d, atm_v3d, atm_ph) !, atm_pres)
 
     ptr_hflx_fire(clb(1):cub(1),clb(2):cub(2)) = ptr_hflx_fire(clb(1):cub(1),clb(2):cub(2)) \
-                 + grnhfx_kinematic(1:grid%nx,1:grid%ny) * config_flags%fire_atm_feedback * dtratio
+                 + grnhfx_kinematic(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe) * config_flags%fire_atm_feedback * dtratio
     ptr_evap_fire(clb(1):cub(1),clb(2):cub(2)) = ptr_evap_fire(clb(1):cub(1),clb(2):cub(2)) \
-                 + grnqfx_kinematic(1:grid%nx,1:grid%ny) * config_flags%fire_atm_feedback * dtratio
+                 + grnqfx_kinematic(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe) * config_flags%fire_atm_feedback * dtratio
     ptr_smoke_fire(clb(1):cub(1),clb(2):cub(2)) = ptr_smoke_fire(clb(1):cub(1),clb(2):cub(2)) \
-                 + smoke(1:grid%nx,1:grid%ny)
+                 + smoke(grid%ifps:grid%ifpe,grid%jfps:grid%jfpe)
 
     deallocate(grnhfx_kinematic, grnqfx_kinematic, smoke)
 

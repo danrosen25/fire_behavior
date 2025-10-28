@@ -33,6 +33,10 @@
 
     subroutine Init_fire_state (grid, config_flags, wrf)
 
+#ifdef DM_PARALLEL
+      use mpi_f08
+#endif
+
       implicit none
 
       type (state_fire_t), intent (in out) :: grid
@@ -43,6 +47,8 @@
       logical, parameter :: DEBUG_LOCAL = .false.
       integer :: i, j, unit_out, unit_out2
 
+      integer :: rank, ierr
+
 
       if (DEBUG_LOCAL) call Print_message ('  Entering subroutine Init_state')
 
@@ -50,7 +56,37 @@
       if (config_flags%ideal_opt == 0) then
           ! Real world
         if (DEBUG_LOCAL) call Print_message ('    Reading geogrid file')
-        geogrid = geogrid_t (file_name = 'geo_em.d01.nc')
+#ifdef DM_PARALLEL
+        call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+#else
+        rank = 0
+#endif
+
+        if (rank == 0) geogrid = geogrid_t (file_name = 'geo_em.d01.nc')
+
+#ifdef DM_PARALLEL
+        call MPI_Bcast (geogrid%cen_lon, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast (geogrid%cen_lat, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast (geogrid%dx, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast (geogrid%dy, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast (geogrid%true_lat_1, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast (geogrid%true_lat_2, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast (geogrid%stand_lon, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+
+        call MPI_Bcast(geogrid%map_proj, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%sr_x, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%sr_y, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+        call MPI_Bcast(geogrid%ifds, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%ifde, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%jfds, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%jfde, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+        call MPI_Bcast(geogrid%ids, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%ide, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%jds, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_Bcast(geogrid%jde, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+#endif
 
         if (DEBUG_LOCAL) call Print_message ('    Initializing fire state')
         call grid%Initialization (config_flags, geogrid)

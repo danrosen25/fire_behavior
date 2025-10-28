@@ -1,36 +1,22 @@
   module fire_model_mod
 
     use fire_physics_mod, only: Calc_flame_length, Calc_fire_fluxes, Calc_smoke_emissions
-    use level_set_mod, only: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, Stop_if_close_to_bdy
+    use level_set_mod, only: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, &
+        Stop_if_close_to_bdy, Copy_lfnout_to_lfn
     use namelist_mod, only : namelist_t
     use ros_mod, only : ros_t
-    use state_mod, only: state_fire_t
+    use state_mod, only: state_fire_t, N_POINTS_IN_HALO
     use stderrout_mod, only : Print_message
+
+#ifdef DM_PARALLEL
+    use mpi_mod, only : Do_halo_exchange_with_corners
+#endif
 
     private
 
     public :: Advance_fire_model
 
   contains
-
-    pure subroutine Copy_lfnout_to_lfn (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, lfn_out, lfn)
-
-      implicit none
-
-      integer, intent (in) :: ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme
-      real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lfn_out
-      real, dimension (ifms:ifme, jfms:jfme), intent (out) :: lfn
-
-      integer :: i, j
-
-
-      do j = jfts, jfte
-        do i = ifts, ifte
-          lfn(i, j) = lfn_out(i, j)
-        end do
-      end do
-
-    end subroutine Copy_lfnout_to_lfn
 
     subroutine Advance_fire_model (config_flags, grid)
 
@@ -65,7 +51,8 @@
           grid%num_tiles, grid%i_start, grid%i_end, grid%j_start, grid%j_end, time_start, grid%dt, grid%dx, grid%dy, &
           config_flags%fire_upwinding, config_flags%fire_viscosity, config_flags%fire_viscosity_bg, config_flags%fire_viscosity_band, &
           config_flags%fire_viscosity_ngp, config_flags%fire_lsm_band_ngp, tbound, grid%lfn, grid%lfn_0, grid%lfn_1, grid%lfn_2, &
-          grid%lfn_out, grid%tign_g, grid%ros, grid%uf, grid%vf, grid%dzdxf, grid%dzdyf, grid%ros_param)
+          grid%lfn_out, grid%tign_g, grid%ros, grid%uf, grid%vf, grid%dzdxf, grid%dzdyf, grid%ros_param, grid%cart_comm, &
+          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe)
 
       if (DEBUG_LOCAL) call Print_message ('calling Stop_if_close_to_bdy...')
       !$OMP PARALLEL DO   &
@@ -94,6 +81,9 @@
       end do
       !$OMP END PARALLEL DO
 
+#ifdef DM_PARALLEL
+      call Do_halo_exchange_with_corners (grid%tign_g, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
+#endif
 
       if (DEBUG_LOCAL) call Print_message ('calling Calc_flame_length...')
       !$OMP PARALLEL DO   &
@@ -114,7 +104,8 @@
           ifms, ifme, jfms, jfme, &
           ifds, ifde, jfds, jfde, time_start, grid%dt, grid%dx, grid%dy, config_flags%fire_upwinding_reinit, &
           config_flags%fire_lsm_reinit_iter, config_flags%fire_lsm_band_ngp, grid%lfn, grid%lfn_2, grid%lfn_s0, &
-           grid%lfn_s1, grid%lfn_s2, grid%lfn_s3, grid%lfn_out, grid%tign_g)
+          grid%lfn_s1, grid%lfn_s2, grid%lfn_s3, grid%lfn_out, grid%tign_g, grid%cart_comm, &
+          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe)
 
       if (DEBUG_LOCAL) call Print_message ('calling Copy_lfnout_to_lfn...')
       !$OMP PARALLEL DO   &
@@ -128,6 +119,10 @@
         call Copy_lfnout_to_lfn (ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme, grid%lfn_out, grid%lfn)
       end do
       !$OMP END PARALLEL DO
+
+#ifdef DM_PARALLEL
+      call Do_halo_exchange_with_corners (grid%lfn, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
+#endif
  
       if (DEBUG_LOCAL) call Print_message ('calling Ignite_prescribed_fires...')
       !$OMP PARALLEL DO   &
