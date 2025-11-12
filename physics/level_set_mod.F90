@@ -1094,6 +1094,8 @@
       call Init_level_set_at_interface (lfn_s0, status, lfn_out, i_start, i_end, &
           j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
 
+! we have to set lfn_s0 boundaries to IN before calling fsm. exchange halos?
+
         ! Set distance across the grid
       select case (fast_dist_reinit_opt)
         case (FAST_DIST_REINIT_FSM)
@@ -1404,6 +1406,33 @@
       !$OMP END PARALLEL DO
 
     end subroutine Set_ls_interface_gradient_inter
+
+    subroutine Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, val)
+
+      implicit none
+
+      integer, intent(in) :: i, j, ifms, ifme, jfms, jfme
+      real, intent(in) :: dx, dy
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn
+      real, intent(out) :: val
+
+      real :: ax, ay, tmp, h
+
+
+      if (dx /= dy) call Stop_simulation ('This eikonal sover only works for homogenous grids (dx = dy)')
+
+      ax = min (lfn(i - 1, j), lfn(i + 1, j))
+      ay = min (lfn(i, j - 1), lfn(i, j + 1))
+
+      tmp = abs(ax - ay)
+      h = dx
+      if (tmp >= h) then
+        val = min(ax, ay) + h
+      else
+        val = (ax + ay + sqrt (2.0 * h ** 2 - tmp ** 2)) / 2.0
+      end if
+
+    end subroutine Solve_eikonal_eq_homo_dxys
 
     subroutine Reinit_ls_fsm ()
 
