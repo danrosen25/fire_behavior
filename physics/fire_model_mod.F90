@@ -2,7 +2,7 @@
 
     use fire_physics_mod, only: Calc_flame_length, Calc_fire_fluxes, Calc_smoke_emissions
     use level_set_mod, only: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, &
-        Stop_if_close_to_bdy, Copy_lfnout_to_lfn
+        Stop_if_close_to_bdy, Copy_lfnout_to_lfn, Reinit_level_set_fast_dist
     use namelist_mod, only : namelist_t
     use ros_mod, only : ros_t
     use state_mod, only: state_fire_t, N_POINTS_IN_HALO
@@ -98,6 +98,13 @@
             grid%ros, grid%ros_param%iboros, grid%flame_length, grid%ros_front, grid%fire_area)
       end do
       !$OMP END PARALLEL DO
+
+      if (config_flags%fast_dist_reinit_opt > 0 .and. grid%itimestep > 0 .and. mod (grid%itimestep, config_flags%fast_dist_reinit_freq) == 0) then
+        if (DEBUG_LOCAL) call Print_message ('calling Reinit_level_set_fast_dist...')
+        call Reinit_level_set_fast_dist (grid%lfn_s0, grid%lfn_out, grid%i_start, grid%i_end, grid%j_start, grid%j_end, &
+             ifms, ifme, jfms, jfme, grid%num_tiles, config_flags%fast_dist_reinit_opt, grid%dx, grid%dy, &
+             grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, grid%ifds, grid%ifde, grid%jfds, grid%jfde, grid%cart_comm)
+      end if
 
       if (DEBUG_LOCAL) call Print_message ('calling Reinit_level_set...')
       if (config_flags%fire_lsm_reinit) call Reinit_level_set (grid%num_tiles, grid%i_start, grid%i_end, grid%j_start, grid%j_end, &

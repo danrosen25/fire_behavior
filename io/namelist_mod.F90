@@ -45,6 +45,9 @@
       integer :: fire_lsm_band_ngp = 4        ! "number of grid points around lfn=0 that WENO5/3 is used (ENO1 elsewhere),
                                               ! for fire_upwinding_reinit=4,5 and fire_upwinding=8,9 options"
 
+      integer :: fast_dist_reinit_opt = 0     ! Fast distance reinitialization method (or eikonal solver): 0) None, 1) FSM
+      integer :: fast_dist_reinit_freq = 600  ! Number of time steps to perform a reinit with fast distance reinit method
+
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
       integer :: wind_vinterp_opt = 0         ! "wind (adjustment factor) interpolation option"
       logical :: fire_lsm_zcoupling = .false. ! "flag to activate reference velocity at a different height from fire_wind_height"
@@ -166,6 +169,8 @@
       call Broadcast_integer (this%fire_lsm_reinit_iter)
       call Broadcast_integer (this%fire_upwinding_reinit)
       call Broadcast_integer (this%fire_lsm_band_ngp)
+      call Broadcast_integer (this%fast_dist_reinit_opt)
+      call Broadcast_integer (this%fast_dist_reinit_freq)
       call Broadcast_logical (this%fire_lsm_zcoupling)
       call Broadcast_real (this%fire_lsm_zcoupling_ref)
       call Broadcast_real (this%fire_viscosity_bg)
@@ -393,6 +398,8 @@
       integer :: fire_lsm_reinit_iter = 1     ! "number of iterations for the reinitialization PDE"
       integer :: fire_upwinding_reinit = 4    ! "numerical scheme (space) for reinitialization PDE: 1=WENO3, 2=WENO5, 3=hybrid WENO3-ENO1, 4=hybrid WENO5-ENO1"
       integer :: fire_lsm_band_ngp = 4        ! "number of grid points around lfn=0 that WENO5/3 is used (ENO1 elsewhere), for fire_upwinding_reinit=4,5 and fire_upwinding=8,9 options"
+      integer :: fast_dist_reinit_opt = 0     ! Fast distance reinit method: 0) None, 1) FSM
+      integer :: fast_dist_reinit_freq = 600  ! Number of time steps to perform a reinit with fast distance reinit method
       logical :: fire_lsm_zcoupling = .false. ! "flag to activate reference velocity at a different height from fire_wind_height"
       real :: fire_lsm_zcoupling_ref = 50.0   ! "reference height from wich u at fire_wind_hegiht is calculated using a logarithmic profile" "m"
       real :: fire_viscosity_bg = 0.4         ! "artificial viscosity in the near-front region" "1"
@@ -446,7 +453,7 @@
           fire_ignition_ros5 = 0.01, fire_ignition_start_time5 = 0.0, fire_ignition_end_time5 = 0.0, fire_ignition_radius5 = 0.0
 
       namelist /fire/  fire_print_msg, fire_atm_feedback, &
-          fire_upwinding, fire_viscosity, fire_lsm_reinit, &
+          fire_upwinding, fire_viscosity, fire_lsm_reinit, fast_dist_reinit_opt, fast_dist_reinit_freq, &
           fire_lsm_reinit_iter, fire_upwinding_reinit, fire_lsm_band_ngp, fire_lsm_zcoupling, fire_lsm_zcoupling_ref, &
           fire_viscosity_bg, fire_viscosity_band, fire_viscosity_ngp, fmoist_run, &
           fmoist_freq, fmoist_dt, &
@@ -478,7 +485,6 @@
       character (len = :), allocatable :: msg
 
 
-
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
         msg = 'Problems opening namelist file ' // trim (file_name)
@@ -497,6 +503,8 @@
       this%fire_lsm_reinit_iter = fire_lsm_reinit_iter
       this%fire_upwinding_reinit = fire_upwinding_reinit
       this%fire_lsm_band_ngp = fire_lsm_band_ngp
+      this%fast_dist_reinit_opt = fast_dist_reinit_opt
+      this%fast_dist_reinit_freq = fast_dist_reinit_freq
       this%fire_lsm_zcoupling = fire_lsm_zcoupling
       this%fire_lsm_zcoupling_ref = fire_lsm_zcoupling_ref
       this%fire_viscosity_bg = fire_viscosity_bg

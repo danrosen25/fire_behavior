@@ -27,9 +27,11 @@
 
     private
 
-    public :: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, Stop_if_close_to_bdy, Copy_lfnout_to_lfn
+    public :: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, Stop_if_close_to_bdy, &
+        Copy_lfnout_to_lfn, Reinit_level_set_fast_dist
 
-    integer, parameter :: BDY_ENO1 = 10
+    integer, parameter :: BDY_ENO1 = 10, FAST_DIST_REINIT_FSM = 1
+    integer, parameter :: FAR = 0, TRIAL = 1, KNOWN = 2
 
   contains
 
@@ -1036,6 +1038,588 @@
       if (DEBUG_LOCAL) call Print_message ('Leaving subroutine Calc_tend_ls')
 
     end subroutine Calc_tend_ls
+
+    subroutine Reinit_level_set_fast_dist (lfn_s0, lfn_out, i_start, i_end, j_start, j_end, ifms, ifme, jfms, &
+            jfme, num_tiles, fast_dist_reinit_opt, dx, dy, ifps, ifpe, jfps, jfpe, ifds, ifde, jfds, jfde, cart_comm)
+
+      implicit none
+
+      integer, intent (in) :: ifms, ifme, jfms, jfme, num_tiles, fast_dist_reinit_opt, &
+          ifps, ifpe, jfps, jfpe, ifds, ifde, jfds, jfde, cart_comm
+      real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_s0, lfn_out
+      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+      real, intent (in) :: dx, dy
+
+      real, parameter :: INF = Huge (1.0)
+      integer :: i, j, ij, ifts, ifte, jfts, jfte
+      integer, dimension (ifms:ifme, jfms:jfme) :: status
+
+      logical, parameter :: DEBUG_LOCAL = .false.
+
+
+      if (DEBUG_LOCAL) call Print_message ('Entering Reinit_level_set_fast_dist')
+
+        ! Init arrays
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            lfn_s0(i, j) = INF
+            status(i, j) = FAR
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+      do j = jfms, jfme
+        do i = ifms, ifme
+          if (i < ifds .or. i > ifde .or. j < jfds .or. j > jfde) then
+            lfn_s0(i, j) = INF
+            status(i, j) = FAR
+          end if
+        end do
+      end do
+
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_s0, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+      ! Update halos and boundaries for lfn_out
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_out, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        call Extrapol_var_at_bdys (ifms, ifme, jfms, jfme, ifds, ifde, &
+            jfds, jfde, ifts, ifte, jfts, jfte, lfn_out)
+      end do
+      !$OMP END PARALLEL DO
+
+        ! Set level set function near the interface
+      if (DEBUG_LOCAL) call Print_message ('calling Init level set function at the interface...')
+      call Init_level_set_at_interface (lfn_s0, status, lfn_out, i_start, i_end, &
+          j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+        ! Set level set function in the rest of the grid
+      select case (fast_dist_reinit_opt)
+        case (FAST_DIST_REINIT_FSM)
+          if (DEBUG_LOCAL) call Print_message ('calling FSM method...')
+          call Reinit_ls_fsm (lfn_s0, status, i_start, i_end, j_start, j_end, num_tiles, dx, dy, &
+              ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, cart_comm)
+
+          !$OMP PARALLEL DO   &
+          !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+          do ij = 1, num_tiles
+            ifts = i_start(ij)
+            ifte = i_end(ij)
+            jfts = j_start(ij)
+            jfte = j_end(ij)
+
+            do j = jfts, jfte
+              do i = ifts, ifte
+                lfn_out(i, j) = sign (1.0, lfn_out(i, j)) * lfn_s0(i, j)
+              end do
+            end do
+          end do
+          !$OMP END PARALLEL DO
+
+        case default
+          call Stop_simulation ('Fast distatnce reinitialization option not valid.')
+
+      end select
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Reinit_level_set_fast_dist')
+
+    end subroutine Reinit_level_set_fast_dist
+
+    subroutine Init_level_set_at_interface (lfn_s0, status, lfn_out, i_start, i_end, &
+        j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+      implicit none
+
+      integer, intent(in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn_s0
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in out) :: status
+      real, intent (in) :: dx, dy
+
+      integer, parameter :: INIT_DEFAULT=0, INIT_ZERO = 1, INIT_SUBGRID = 2, INIT_QUADRATIC = 3, &
+          INIT_GRADIENT = 4
+      integer :: init_method
+
+
+      init_method = INIT_GRADIENT
+
+      select case (init_method)
+        case (INIT_DEFAULT)
+          call Set_ls_interface_default (lfn_s0, status, lfn_out, i_start, i_end, &
+              j_start, j_end, num_tiles, ifms, ifme, jfms, jfme)
+
+        case (INIT_ZERO)
+          call Set_ls_interface_zero (lfn_s0, status, lfn_out, i_start, i_end, &
+              j_start, j_end, num_tiles, ifms, ifme, jfms, jfme)
+
+        case (INIT_SUBGRID)
+          call Set_ls_interface_subgrid_inter (lfn_s0, status, lfn_out, i_start, i_end, &
+              j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+        case (INIT_QUADRATIC)
+          call Set_ls_interface_quadratic_inter (lfn_s0, status, lfn_out, i_start, i_end, &
+              j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+        case (INIT_GRADIENT)
+          call Set_ls_interface_gradient_inter (lfn_s0, status, lfn_out, i_start, i_end, &
+              j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+        case default
+          call Stop_simulation ('Error: phi_init method not available')
+
+      end select
+
+    end subroutine Init_level_set_at_interface
+
+    subroutine Set_ls_interface_default (lfn_s0, status, lfn_out, i_start, i_end, &
+        j_start, j_end, num_tiles, ifms, ifme, jfms, jfme)
+
+      implicit none
+
+      integer, intent(in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn_s0
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in out) :: status
+
+      integer :: ifts, ifte, jfts, jfte, i, j, ij
+
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            if (lfn_out(i, j) * lfn_out(i + 1, j) < 0.0 .or. &
+                lfn_out(i, j) * lfn_out(i - 1, j) < 0.0 .or. &
+                lfn_out(i, j) * lfn_out(i, j + 1) < 0.0 .or. &
+                lfn_out(i, j) * lfn_out(i, j - 1) < 0.0) then
+              lfn_s0(i, j) = lfn_out(i, j)
+              status(i, j) = KNOWN
+            end if
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+    end subroutine Set_ls_interface_default
+
+    subroutine Set_ls_interface_zero (lfn_s0, status, lfn_out, i_start, i_end, &
+        j_start, j_end, num_tiles, ifms, ifme, jfms, jfme)
+
+      implicit none
+
+      integer, intent(in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn_s0
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in out) :: status
+
+      integer :: ifts, ifte, jfts, jfte, i, j, ij
+
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            if (lfn_out(i, j) * lfn_out(i + 1, j) < 0.0 .or. &
+                lfn_out(i, j) * lfn_out(i - 1, j) < 0.0 .or. &
+                lfn_out(i, j) * lfn_out(i, j + 1) < 0.0 .or. &
+                lfn_out(i, j) * lfn_out(i, j - 1) < 0.0) then
+              lfn_s0(i, j) = 0.0
+              status(i, j) = KNOWN
+            end if
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+    end subroutine Set_ls_interface_zero
+
+    subroutine Set_ls_interface_subgrid_inter (lfn_s0, status, lfn_out, i_start, i_end, &
+        j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+      implicit none
+
+      integer, intent(in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn_s0
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in out) :: status
+      real, intent (in) :: dx, dy
+
+      integer :: ifts, ifte, jfts, jfte, i, j, ij
+
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            if (lfn_out(i, j) * lfn_out(i + 1, j) < 0.0) then
+              lfn_s0(i, j) = abs (lfn_out(i, j)) * dx / (abs (lfn_out(i, j)) + abs (lfn_out(i + 1, j)))
+              status(i, j) = KNOWN
+
+            else if (lfn_out(i, j) * lfn_out(i - 1, j) < 0.0) then
+              lfn_s0(i, j) = abs (lfn_out(i, j)) * dx / (abs (lfn_out(i, j)) + abs (lfn_out(i - 1, j)))
+              status(i, j) = KNOWN
+
+            else if (lfn_out(i, j) * lfn_out(i, j + 1) < 0.0) then
+              lfn_s0(i, j) = abs (lfn_out(i, j)) * dy / (abs (lfn_out(i, j)) + abs (lfn_out(i, j + 1)))
+              status(i, j) = KNOWN
+
+            else if (lfn_out(i, j) * lfn_out(i, j - 1) < 0.0) then
+              lfn_s0(i, j) = abs (lfn_out(i, j)) * dy / (abs (lfn_out(i, j)) + abs (lfn_out(i, j - 1)))
+              status(i, j) = KNOWN
+            end if
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+    end subroutine Set_ls_interface_subgrid_inter
+
+    subroutine Set_ls_interface_quadratic_inter (lfn_s0, status, lfn_out, i_start, i_end, &
+        j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+      ! Use 3 points for a quadratic interpolation: lfn(x) = a x^2 + b x + c
+
+      implicit none
+
+      integer, intent(in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn_s0
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in out) :: status
+      real, intent (in) :: dx, dy
+
+      integer :: ifts, ifte, jfts, jfte, i, j, ij
+      real :: denom, ratio, a, b, c, x0, x1, x2, y0, y1, y2, root
+      real, parameter :: TOL = 1.0e-12
+
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+              ! x-direction
+            if (lfn_out(i, j) * lfn_out (i + 1, j) < 0.0) then
+              x0 = -dx
+              x1 = 0.0
+              x2 = dx
+              y0 = lfn_out(i - 1, j)
+              y1 = lfn_out(i, j)
+              y2 = lfn_out(i + 1, j)
+
+              denom = (x0 - x1) * (x0 - x2) * (x1 - x2)
+              if (abs (denom) > TOL) then
+                a = (x2 * (y1 - y0) + x1 * (y0 - y2) + x0 * (y2 - y1)) / denom
+                b = (x2 * x2 * (y0 - y1) + x1 * x1 * (y2 - y0) + x0 * x0 * (y1 - y2)) / denom
+                c = (x1 * x2 * (x1 - x2) * y0 + x2 * x0 * (x2 - x0) * y1 + x0 * x1 * (x0 - x1) * y2) / denom
+
+                  ! Solve lfn(x) = 0 for x between [0, dx]
+                root = (-b + sign (1.0, lfn_out(i + 1, j)) * sqrt (b * b - 4 * a * c)) / (2 * a)
+                root = max (min (root, dx), 0.0)
+                lfn_s0(i, j) = abs (root)
+                status(i, j) = KNOWN
+              end if
+
+              ! y-direction
+            else if (lfn_out(i, j) * lfn_out(i, j + 1) < 0.0) then
+              y0 = -dy
+              y1 = 0.0
+              y2 = dy
+              x0 = lfn_out(i, j - 1)
+              x1 = lfn_out(i, j)
+              x2 = lfn_out(i, j + 1)
+
+              denom = (y0 - y1) * (y0 - y2) * (y1 - y2)
+              if (abs(denom) > TOL) then
+                a = (y2 * (x1 - x0) + y1 * (x0 - x2) + y0 * (x2 - x1)) / denom
+                b = (y2 * y2 * (x0 - x1) + y1 * y1* (x2 - x0) + y0 * y0 * (x1 - x2)) / denom
+                c = (y1 * y2 * (y1 - y2) * x0 + y2 * y0 * (y2 - y0 )* x1 + y0 * y1 * (y0 - y1) * x2) / denom
+
+                root = (-b + sign(1.0, lfn_out(i, j + 1)) * sqrt (b * b - 4 * a * c)) / (2 * a)
+                root = max (min (root, dy), 0.0)
+                lfn_s0(i, j) = abs (root)
+                status(i, j) = KNOWN
+              end if
+            end if
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+    end subroutine Set_ls_interface_quadratic_inter
+
+    subroutine Set_ls_interface_gradient_inter (lfn_s0, status, lfn_out, i_start, i_end, &
+        j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
+
+      implicit none
+
+      integer, intent(in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn_s0
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in out) :: status
+      real, intent (in) :: dx, dy
+
+      integer :: ifts, ifte, jfts, jfte, i, j, ij
+      real dphidx, dphidy, gradphi
+
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+      do ij = 1, num_tiles
+        ifts = i_start(ij)
+        ifte = i_end(ij)
+        jfts = j_start(ij)
+        jfte = j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            if (lfn_out(i, j) == 0.0) then
+              lfn_s0(i, j) = 0.0
+              status(i, j) = KNOWN
+            else if (lfn_out(i, j) * lfn_out(i + 1, j) < 0.0 .or. &
+                lfn_out(i,j) * lfn_out(i - 1, j) < 0.0 .or. &
+                lfn_out(i,j) * lfn_out(i, j + 1) < 0.0 .or. &
+                lfn_out(i,j) * lfn_out(i, j - 1) < 0.0) then
+
+               ! Calc grads
+             dphidx = (lfn_out(i + 1, j) - lfn_out(i - 1, j)) / (2.0 * dx)
+             dphidy = (lfn_out(i, j + 1) - lfn_out(i, j - 1)) / (2.0 * dy)
+             gradphi = sqrt (dphidx ** 2 + dphidy ** 2 + 1.0e-12)
+
+              lfn_s0(i, j) = abs (lfn_out(i, j)) / gradphi
+              status(i, j) = KNOWN
+            end if
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+    end subroutine Set_ls_interface_gradient_inter
+
+    subroutine Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, val)
+
+      implicit none
+
+      integer, intent(in) :: i, j, ifms, ifme, jfms, jfme
+      real, intent(in) :: dx, dy
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lfn
+      real, intent(out) :: val
+
+      real :: ax, ay, tmp, h
+
+
+      if (dx /= dy) call Stop_simulation ('This eikonal sover only works for homogenous grids (dx = dy)')
+
+      ax = min (lfn(i - 1, j), lfn(i + 1, j))
+      ay = min (lfn(i, j - 1), lfn(i, j + 1))
+
+      tmp = abs(ax - ay)
+      h = dx
+      if (tmp >= h) then
+        val = min(ax, ay) + h
+      else
+        val = (ax + ay + sqrt (2.0 * h ** 2 - tmp ** 2)) / 2.0
+      end if
+
+    end subroutine Solve_eikonal_eq_homo_dxys
+
+    subroutine Reinit_ls_fsm (lfn, status, i_start, i_end, j_start, j_end, num_tiles, dx, dy, &
+        ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, cart_comm)
+
+    ! Purpose: Fast Sweeping Method. It is thread safe and there are no race conditions. 
+    !          It will not give bit for bit results but will converge to the right solution.
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+
+      implicit none
+
+      integer, intent (in) :: num_tiles, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, cart_comm
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in) :: status
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn
+      integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
+      real, intent(in) :: dx, dy
+     
+      real, parameter ::  TOL = 1.0e-6
+      integer, parameter :: MAX_ITER = 20
+
+      integer :: iter, i, j, ij, ifts, ifte, jfts, jfte, ierr
+      real :: old, new_val, diff, max_diff, global_max_diff
+
+      logical, parameter :: DEBUG_LOCAL = .false.
+
+      do iter = 1, MAX_ITER
+        max_diff = 0.0
+
+          ! Sweep: i=1->nx, j=1->ny
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifts, ifte
+            do j = jfts, jfte
+              if (status(i, j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+          ! Sweep: i=nx->1, j=1->ny
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifte, ifts, -1
+            do j = jfts, jfte
+              if (status(i, j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+          ! Sweep: i=1->nx, j=ny->1
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifts, ifte
+            do j = jfte, jfts, -1
+              if (status(i,j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+          ! Sweep: i=nx->1, j=ny->1
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifte, ifts, -1
+            do j = jfte, jfts, -1
+              if (status(i,j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+#ifdef DM_PARALLEL
+        call MPI_Allreduce(max_diff, global_max_diff, 1, MPI_REAL, MPI_MAX, cart_comm, ierr)
+#else
+        global_max_diff = max_diff
+#endif
+
+        if (global_max_diff < TOL) exit
+      end do
+
+!      if (DEBUG_LOCAL) print *, 'FSM number iterations = ', iter
+
+    end subroutine Reinit_ls_fsm
 
     pure function Select_upwind (diff_lx, diff_rx) result (return_value)
 
