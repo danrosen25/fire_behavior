@@ -99,7 +99,7 @@
       end do
       !$OMP END PARALLEL DO
 
-      if (config_flags%fast_dist_reinit_opt > 0) then
+      if (config_flags%fast_dist_reinit_opt > 0 .and. grid%itimestep > 0 .and. mod (grid%itimestep, config_flags%fast_dist_reinit_freq) == 0) then
         if (DEBUG_LOCAL) call Print_message ('calling Reinit_level_set_fast_dist...')
         call Reinit_level_set_fast_dist (grid%lfn_s0, grid%lfn_out, grid%i_start, grid%i_end, grid%j_start, grid%j_end, &
              ifms, ifme, jfms, jfme, grid%num_tiles, config_flags%fast_dist_reinit_opt, grid%dx, grid%dy, &

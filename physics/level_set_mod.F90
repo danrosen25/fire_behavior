@@ -1050,10 +1050,14 @@
       integer, dimension(num_tiles), intent(in) :: i_start, i_end, j_start, j_end
       real, intent (in) :: dx, dy
 
-      real, parameter :: INF = Huge (INF)
+      real, parameter :: INF = Huge (1.0)
       integer :: i, j, ij, ifts, ifte, jfts, jfte
       integer, dimension (ifms:ifme, jfms:jfme) :: status
 
+      logical, parameter :: DEBUG_LOCAL = .false.
+
+
+      if (DEBUG_LOCAL) call Print_message ('Entering Reinit_level_set_fast_dist')
 
         ! Init arrays
       !$OMP PARALLEL DO   &
@@ -1073,6 +1077,19 @@
       end do
       !$OMP END PARALLEL DO
 
+      do j = jfms, jfme
+        do i = ifms, ifme
+          if (i < ifds .or. i > ifde .or. j < jfds .or. j > jfde) then
+            lfn_s0(i, j) = INF
+            status(i, j) = FAR
+          end if
+        end do
+      end do
+
+#ifdef DM_PARALLEL
+      call Do_halo_exchange (lfn_s0, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
       ! Update halos and boundaries for lfn_out
 #ifdef DM_PARALLEL
       call Do_halo_exchange (lfn_out, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
@@ -1091,20 +1108,40 @@
       end do
       !$OMP END PARALLEL DO
 
+        ! Set level set function near the interface
+      if (DEBUG_LOCAL) call Print_message ('calling Init level set function at the interface...')
       call Init_level_set_at_interface (lfn_s0, status, lfn_out, i_start, i_end, &
           j_start, j_end, num_tiles, ifms, ifme, jfms, jfme, dx, dy)
 
-! we have to set lfn_s0 boundaries to IN before calling fsm. exchange halos?
-
-        ! Set distance across the grid
+        ! Set level set function in the rest of the grid
       select case (fast_dist_reinit_opt)
         case (FAST_DIST_REINIT_FSM)
-          call Reinit_ls_fsm ()
+          if (DEBUG_LOCAL) call Print_message ('calling FSM method...')
+          call Reinit_ls_fsm (lfn_s0, status, i_start, i_end, j_start, j_end, num_tiles, dx, dy, &
+              ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, cart_comm)
+
+          !$OMP PARALLEL DO   &
+          !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
+          do ij = 1, num_tiles
+            ifts = i_start(ij)
+            ifte = i_end(ij)
+            jfts = j_start(ij)
+            jfte = j_end(ij)
+
+            do j = jfts, jfte
+              do i = ifts, ifte
+                lfn_out(i, j) = sign (1.0, lfn_out(i, j)) * lfn_s0(i, j)
+              end do
+            end do
+          end do
+          !$OMP END PARALLEL DO
 
         case default
           call Stop_simulation ('Fast distatnce reinitialization option not valid.')
 
       end select
+
+      if (DEBUG_LOCAL) call Print_message ('Leaving Reinit_level_set_fast_dist')
 
     end subroutine Reinit_level_set_fast_dist
 
@@ -1125,7 +1162,7 @@
       integer :: init_method
 
 
-      init_method = INIT_DEFAULT
+      init_method = INIT_GRADIENT
 
       select case (init_method)
         case (INIT_DEFAULT)
@@ -1434,11 +1471,153 @@
 
     end subroutine Solve_eikonal_eq_homo_dxys
 
-    subroutine Reinit_ls_fsm ()
+    subroutine Reinit_ls_fsm (lfn, status, i_start, i_end, j_start, j_end, num_tiles, dx, dy, &
+        ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, cart_comm)
+
+    ! Purpose: Fast Sweeping Method. It is thread safe and there are no race conditions. 
+    !          It will not give bit for bit results but will converge to the right solution.
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
 
       implicit none
 
-      continue
+      integer, intent (in) :: num_tiles, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, cart_comm
+      integer, dimension(ifms:ifme, jfms:jfme), intent(in) :: status
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: lfn
+      integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
+      real, intent(in) :: dx, dy
+     
+      real, parameter ::  TOL = 1.0e-6
+      integer, parameter :: MAX_ITER = 20
+
+      integer :: iter, i, j, ij, ifts, ifte, jfts, jfte, ierr
+      real :: old, new_val, diff, max_diff, global_max_diff
+
+      logical, parameter :: DEBUG_LOCAL = .false.
+
+      do iter = 1, MAX_ITER
+        max_diff = 0.0
+
+          ! Sweep: i=1->nx, j=1->ny
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifts, ifte
+            do j = jfts, jfte
+              if (status(i, j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+          ! Sweep: i=nx->1, j=1->ny
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifte, ifts, -1
+            do j = jfts, jfte
+              if (status(i, j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+          ! Sweep: i=1->nx, j=ny->1
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifts, ifte
+            do j = jfte, jfts, -1
+              if (status(i,j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+          ! Sweep: i=nx->1, j=ny->1
+        !$omp parallel do default(shared) private(i, j, old, new_val, diff, ifts, ifte, jfts, jfte, ij) &
+        !$omp reduction(max:max_diff)
+        do ij = 1, num_tiles
+          ifts = i_start(ij)
+          ifte = i_end(ij)
+          jfts = j_start(ij)
+          jfte = j_end(ij)
+
+          do i = ifte, ifts, -1
+            do j = jfte, jfts, -1
+              if (status(i,j) /= KNOWN) then
+                old = lfn(i,j)
+                call Solve_eikonal_eq_homo_dxys (i, j, lfn, dx, dy, ifms, ifme, jfms, jfme, new_val)
+                lfn(i,j) = min(old,new_val)
+                diff = abs(lfn(i,j) - old)
+                if (diff > max_diff) max_diff = diff
+              end if
+            end do
+          end do
+        end do
+        !$omp end parallel do
+
+#ifdef DM_PARALLEL
+        call Do_halo_exchange (lfn, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, N_POINTS_IN_HALO, cart_comm)
+#endif
+
+#ifdef DM_PARALLEL
+        call MPI_Allreduce(max_diff, global_max_diff, 1, MPI_REAL, MPI_MAX, cart_comm, ierr)
+#else
+        global_max_diff = max_diff
+#endif
+
+        if (global_max_diff < TOL) exit
+      end do
+
+!      if (DEBUG_LOCAL) print *, 'FSM number iterations = ', iter
 
     end subroutine Reinit_ls_fsm
 
