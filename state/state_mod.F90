@@ -241,7 +241,7 @@
         call wrf%Update_atm_state (this%datetime_now)
 
         if (DEBUG_LOCAL) call Print_message ('  Interpolating WRF vars...')
-        call this%interpolate_vars_atm_to_fire(wrf, config_flags)
+        call this%Interpolate_vars_atm_to_fire(wrf, config_flags)
 
         call this%datetime_next_atm_update%Add_seconds (config_flags%interval_atm)
 
@@ -752,8 +752,8 @@
       if (allocated (this%lats) .and. allocated (this%lons)) then
 
         If_start: if (this%datetime_now == this%datetime_start) then
-          call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-              this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'fz0', var2d)
+          call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+              this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'fz0', config_flags%hinterp_opt, var2d)
               this%fz0(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
         endif If_start
 
@@ -764,28 +764,28 @@
           end do
         end do
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'uf', var2d)
+        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'uf', config_flags%hinterp_opt, var2d)
             this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'vf', var2d)
+        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'vf', config_flags%hinterp_opt, var2d)
             this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 't2', var2d)
+        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 't2', config_flags%hinterp_opt, var2d)
             this%fire_t2(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'q2', var2d)
+        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'q2', config_flags%hinterp_opt, var2d)
             this%fire_q2(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'psfc', var2d)
+        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'psfc', config_flags%hinterp_opt, var2d)
             this%fire_psfc(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
-        call wrf%interp_var2grid_nearest (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'rain', var2d)
+        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
+            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'rain', config_flags%hinterp_opt, var2d)
             this%fire_rain(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
 
         deallocate (var2d)

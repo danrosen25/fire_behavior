@@ -50,6 +50,7 @@
 
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
       integer :: wind_vinterp_opt = 0         ! "wind (adjustment factor) interpolation option"
+      integer :: hinterp_opt = 1              ! "Horizontal interpolation from atm to fire (offline option): 1) ngp, 2)bi-linear"
       logical :: fire_lsm_zcoupling = .false. ! "flag to activate reference velocity at a different height from fire_wind_height"
       real :: fire_lsm_zcoupling_ref = 50.0   ! "reference height from wich u at fire_wind_hegiht is calculated using a logarithmic profile" "m"
 
@@ -191,6 +192,7 @@
       call Broadcast_integer (this%ros_opt)
       call Broadcast_integer (this%emis_opt)
       call Broadcast_integer (this%wind_vinterp_opt)
+      call Broadcast_integer (this%hinterp_opt)
 
       call Broadcast_integer (this%fire_num_ignitions)
 
@@ -410,6 +412,7 @@
       real :: fmoist_dt = 600                 ! "moisture model time step" "s"
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
       integer :: wind_vinterp_opt = 0         ! "wind (adjustment factor) interpolation option"
+      integer :: hinterp_opt = 1              ! "Horizontal interpolation from atm to fire (offline option): 1) ngp, 2) bi-linear"
       logical :: fire_is_real_perim = .false. ! .false. = point/line ignition, .true. = observed perimeter"
       real :: frac_fburnt_to_smoke = 0.02     ! "parts per unit of burned fuel becoming smoke " "g_smoke/kg_air"
       real :: fuelmc_g = 0.08                 ! Fuel moisture content ground (Dead FMC)
@@ -463,6 +466,7 @@
             ! objects
           fuel_opt, ros_opt, fmc_opt, emis_opt, &
           wind_vinterp_opt, &
+          hinterp_opt, &
             ! Ignitions
           fire_num_ignitions, &
             ! Ignition 1
@@ -527,6 +531,7 @@
       this%fmc_opt = fmc_opt
       this%emis_opt = emis_opt
       this%wind_vinterp_opt = wind_vinterp_opt
+      this%hinterp_opt = hinterp_opt
 
       this%fire_num_ignitions = fire_num_ignitions
 

@@ -1,12 +1,90 @@
   module interp_mod
 
+    use proj_lc_mod, only : proj_lc_t
+
     implicit none
 
     private
 
-    public :: Interp_profile
+    integer, parameter :: HINTERP_NEAREST = 1, HINTERP_BILINEAR = 2
+
+    public :: Interp_profile, Interp_horizontal_nearest, Interp_horizontal_bilinear, HINTERP_NEAREST, HINTERP_BILINEAR
 
   contains
+
+    subroutine Interp_horizontal_nearest (data_in, proj_data_in, lats_out, lons_out, data_out)
+
+    ! Purpose: Nearest neighbor interpolation/extrapolation
+
+      implicit none
+
+      real, dimension(:, :), intent (in) :: data_in
+      type (proj_lc_t), intent (in) :: proj_data_in
+      real, dimension (:, :), intent (in) :: lats_out, lons_out
+!      real, dimension (size (lats_out, dim = 1), size (lats_out, dim = 2)), intent (out) :: data_out
+      real, dimension (:, :), intent (in out) :: data_out
+
+      integer :: i, j, i_in, j_in, nx, ny, nx_in, ny_in
+      real :: i_real, j_real
+
+
+      nx = size (lats_out, dim = 1)
+      ny = size (lats_out, dim = 2)
+      nx_in = size (data_in, dim = 1)
+      ny_in = size (data_in, dim = 2)
+
+      do j = 1, ny
+        do i = 1, nx
+          call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
+          i_in = min (max (1, nint (i_real)), nx_in)
+          j_in = min (max (1, nint (j_real)), ny_in)
+          data_out(i, j) = data_in(i_in, j_in)
+        end do
+      end do
+
+    end subroutine Interp_horizontal_nearest
+
+    subroutine Interp_horizontal_bilinear (data_in, proj_data_in, lats_out, lons_out, data_out)
+
+    ! Purpose: bi-linear interpolation + nearest neighbor extrapolation
+
+      implicit none
+
+      real, dimension(:, :), intent (in) :: data_in
+      type (proj_lc_t), intent (in) :: proj_data_in
+      real, dimension (:, :), intent (in) :: lats_out, lons_out
+!      real, dimension (size (lats_out, dim = 1), size (lats_out, dim = 2)), intent (out) :: data_out
+      real, dimension (:, :), intent (in out) :: data_out
+
+      integer :: i, j, i0, j0, i1, j1, nx, ny, nx_in, ny_in
+      real :: i_real, j_real, di, dj
+
+
+      nx = size (lats_out, dim = 1)
+      ny = size (lats_out, dim = 2)
+      nx_in = size (data_in, dim = 1)
+      ny_in = size (data_in, dim = 2)
+
+      do j = 1, ny
+        do i = 1, nx
+          call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
+
+          i0 = max (1, min (nx_in - 1, int (floor (i_real))))
+          j0 = max (1, min (ny_in - 1, int (floor (j_real))))
+          i1 = i0 + 1
+          j1 = j0 + 1
+
+          di = max (0.0, min (1.0, i_real - real (i0)))
+          dj = max (0.0, min (1.0, j_real - real (j0)))
+
+          data_out(i, j) = (1.0 - di) * (1.0 - dj) * data_in(i0, j0) + &
+              di * (1.0 - dj) * data_in(i1, j0) + &
+              (1.0 - di) * dj * data_in(i0, j1) + &
+              di * dj * data_in(i1, j1)
+        end do
+      end do
+
+    end subroutine Interp_horizontal_bilinear
 
     subroutine Interp_profile (fire_lsm_zcoupling, fire_lsm_zcoupling_ref, fire_wind_height, kfds, kfde, &
         uin, vin, z_at_w, z0f, uout, vout)
