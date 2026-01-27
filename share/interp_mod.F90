@@ -12,7 +12,8 @@
 
   contains
 
-    subroutine Interp_horizontal_nearest (data_in, proj_data_in, lats_out, lons_out, data_out)
+    subroutine Interp_horizontal_nearest (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
+        lats_out, lons_out, data_out)
 
     ! Purpose: Nearest neighbor interpolation/extrapolation
 
@@ -20,21 +21,19 @@
 
       real, dimension(:, :), intent (in) :: data_in
       type (proj_lc_t), intent (in) :: proj_data_in
-      real, dimension (:, :), intent (in) :: lats_out, lons_out
-!      real, dimension (size (lats_out, dim = 1), size (lats_out, dim = 2)), intent (out) :: data_out
-      real, dimension (:, :), intent (in out) :: data_out
+      integer, intent (in) :: ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe
+      real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lats_out, lons_out
+      real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: data_out
 
-      integer :: i, j, i_in, j_in, nx, ny, nx_in, ny_in
+      integer :: i, j, i_in, j_in, nx_in, ny_in
       real :: i_real, j_real
 
 
-      nx = size (lats_out, dim = 1)
-      ny = size (lats_out, dim = 2)
       nx_in = size (data_in, dim = 1)
       ny_in = size (data_in, dim = 2)
 
-      do j = 1, ny
-        do i = 1, nx
+      do j = jfps, jfpe
+        do i = ifps, ifpe
           call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
           i_in = min (max (1, nint (i_real)), nx_in)
           j_in = min (max (1, nint (j_real)), ny_in)
@@ -44,7 +43,8 @@
 
     end subroutine Interp_horizontal_nearest
 
-    subroutine Interp_horizontal_bilinear (data_in, proj_data_in, lats_out, lons_out, data_out)
+    subroutine Interp_horizontal_bilinear (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
+        lats_out, lons_out, data_out)
 
     ! Purpose: bi-linear interpolation + nearest neighbor extrapolation
 
@@ -52,21 +52,19 @@
 
       real, dimension(:, :), intent (in) :: data_in
       type (proj_lc_t), intent (in) :: proj_data_in
-      real, dimension (:, :), intent (in) :: lats_out, lons_out
-!      real, dimension (size (lats_out, dim = 1), size (lats_out, dim = 2)), intent (out) :: data_out
-      real, dimension (:, :), intent (in out) :: data_out
+      integer, intent (in) :: ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe
+      real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lats_out, lons_out
+      real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: data_out
 
-      integer :: i, j, i0, j0, i1, j1, nx, ny, nx_in, ny_in
+      integer :: i, j, i0, j0, i1, j1, nx_in, ny_in
       real :: i_real, j_real, di, dj
 
 
-      nx = size (lats_out, dim = 1)
-      ny = size (lats_out, dim = 2)
       nx_in = size (data_in, dim = 1)
       ny_in = size (data_in, dim = 2)
 
-      do j = 1, ny
-        do i = 1, nx
+      do j = jfps, jfpe
+        do i = ifps, ifpe
           call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
 
           i0 = max (1, min (nx_in - 1, int (floor (i_real))))

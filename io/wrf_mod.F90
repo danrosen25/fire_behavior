@@ -645,32 +645,25 @@
 
     end subroutine Get_latcloncs
 
-    subroutine Interp_var2grid (this, lats_in, lons_in, var_name, hinterp_opt, vals_out)
+    subroutine Interp_var2grid (this, lats_in, lons_in, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
+        var_name, hinterp_opt, vals_out)
 
       use, intrinsic :: iso_fortran_env, only : ERROR_UNIT
 
       implicit none
 
       class (wrf_t), intent(in) :: this
-      real, dimension(:, :), intent(in) :: lats_in, lons_in
+      integer, intent (in) :: ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lats_in, lons_in
       character (len = *), intent (in) :: var_name
       integer, intent (in) :: hinterp_opt
-      real, dimension(:, :), allocatable, intent(out) :: vals_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: vals_out
 
-      real, parameter :: DEFAULT_INIT = 0.0
       real, dimension(:, :), allocatable :: var_wrf
       type (proj_lc_t) :: proj
-      integer :: nx, ny, i, j
 
 
         ! Init
-      nx = size (lats_in, dim = 1)
-      ny = size (lats_in, dim = 2)
-
-      if (allocated (vals_out)) deallocate (vals_out)
-      allocate (vals_out(nx, ny))
-      vals_out = DEFAULT_INIT
-
       proj = this%Get_projection ()
 
         ! Get WRF data
@@ -701,17 +694,18 @@
           stop
       end select
 
-        ! Algorithm
+        ! Algorithm(s)
       Hinterp: select case (hinterp_opt)
-
         case (HINTERP_NEAREST)
-          call Interp_horizontal_nearest (var_wrf, proj, lats_in, lons_in, vals_out)
+          call Interp_horizontal_nearest (var_wrf, proj, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
+              lats_in, lons_in, vals_out)
 
         case (HINTERP_BILINEAR)
-          call Interp_horizontal_bilinear (var_wrf, proj, lats_in, lons_in, vals_out)
+          call Interp_horizontal_bilinear (var_wrf, proj, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
+              lats_in, lons_in, vals_out)
 
         case default
-        call Stop_simulation ('The horizontal interpolation option selected does not exist.')
+          call Stop_simulation ('The horizontal interpolation option selected does not exist.')
 
       end select Hinterp
 

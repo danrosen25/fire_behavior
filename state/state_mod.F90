@@ -744,18 +744,15 @@
       type (wrf_t), intent(inout) :: wrf
       type (namelist_t), intent (in) :: config_flags
 
-      real, dimension(:, :), allocatable :: var2d
       integer :: i, j
 
 
         ! We need the fire grid lat/lon
       if (allocated (this%lats) .and. allocated (this%lons)) then
 
-        If_start: if (this%datetime_now == this%datetime_start) then
-          call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-              this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'fz0', config_flags%hinterp_opt, var2d)
-              this%fz0(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
-        endif If_start
+        if (this%datetime_now == this%datetime_start) call wrf%Interp_var2grid (this%lats, this%lons, &
+            this%ifms, this%ifme, this%jfms, this%jfme, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
+            config_flags%hinterp_opt, this%fz0)
 
         do j = 1, wrf%jde
           do i = 1, wrf%ide
@@ -764,31 +761,24 @@
           end do
         end do
 
-        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'uf', config_flags%hinterp_opt, var2d)
-            this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
+        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+            this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', config_flags%hinterp_opt, this%uf)
 
-        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'vf', config_flags%hinterp_opt, var2d)
-            this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
+        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+            this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', config_flags%hinterp_opt, this%vf)
 
-        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 't2', config_flags%hinterp_opt, var2d)
-            this%fire_t2(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
+        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+            this%ifps, this%ifpe, this%jfps, this%jfpe, 't2', config_flags%hinterp_opt, this%fire_t2)
 
-        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'q2', config_flags%hinterp_opt, var2d)
-            this%fire_q2(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
+        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+            this%ifps, this%ifpe, this%jfps, this%jfpe, 'q2', config_flags%hinterp_opt, this%fire_q2)
 
-        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'psfc', config_flags%hinterp_opt, var2d)
-            this%fire_psfc(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
+        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+            this%ifps, this%ifpe, this%jfps, this%jfpe, 'psfc', config_flags%hinterp_opt, this%fire_psfc)
 
-        call wrf%Interp_var2grid (this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe), &
-            this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe), 'rain', config_flags%hinterp_opt, var2d)
-            this%fire_rain(this%ifps:this%ifpe, this%jfps:this%jfpe) = var2d
+        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+            this%ifps, this%ifpe, this%jfps, this%jfpe, 'rain', config_flags%hinterp_opt, this%fire_rain)
 
-        deallocate (var2d)
       end if
 
     end subroutine Interpolate_vars_atm_to_fire
