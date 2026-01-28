@@ -751,8 +751,8 @@
           call Stop_simulation ('Init lats/lons before calling hinterp atm variables')
 
       if (this%datetime_now == this%datetime_start) call wrf%Interp_var2grid (this%lats, this%lons, &
-          this%ifms, this%ifme, this%jfms, this%jfme, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
-          config_flags%hinterp_opt, this%fz0)
+          this%ifms, this%ifme, this%jfms, this%jfme, config_flags%num_tiles, this%i_start, this%i_end, &
+          this%j_start, this%j_end, 'fz0', config_flags%hinterp_opt, this%fz0)
 
       do j = 1, wrf%jde
         do i = 1, wrf%ide
@@ -762,22 +762,28 @@
       end do
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-          this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', config_flags%hinterp_opt, this%uf)
+          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
+          'uf', config_flags%hinterp_opt, this%uf)
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-          this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', config_flags%hinterp_opt, this%vf)
+          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
+          'vf', config_flags%hinterp_opt, this%vf)
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-          this%ifps, this%ifpe, this%jfps, this%jfpe, 't2', config_flags%hinterp_opt, this%fire_t2)
+          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
+          't2', config_flags%hinterp_opt, this%fire_t2)
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-          this%ifps, this%ifpe, this%jfps, this%jfpe, 'q2', config_flags%hinterp_opt, this%fire_q2)
+          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
+          'q2', config_flags%hinterp_opt, this%fire_q2)
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-          this%ifps, this%ifpe, this%jfps, this%jfpe, 'psfc', config_flags%hinterp_opt, this%fire_psfc)
+          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
+          'psfc', config_flags%hinterp_opt, this%fire_psfc)
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-          this%ifps, this%ifpe, this%jfps, this%jfpe, 'rain', config_flags%hinterp_opt, this%fire_rain)
+          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
+          'rain', config_flags%hinterp_opt, this%fire_rain)
 
     end subroutine Interpolate_vars_atm_to_fire
 

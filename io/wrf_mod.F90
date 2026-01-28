@@ -645,13 +645,14 @@
 
     end subroutine Get_latcloncs
 
-    subroutine Interp_var2grid (this, lats_in, lons_in, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
-        var_name, hinterp_opt, vals_out)
+    subroutine Interp_var2grid (this, lats_in, lons_in, ifms, ifme, jfms, jfme, &
+        num_tiles, i_start, i_end, j_start, j_end, var_name, hinterp_opt, vals_out)
 
       implicit none
 
       class (wrf_t), intent(in) :: this
-      integer, intent (in) :: ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe
+      integer, intent (in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
       real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lats_in, lons_in
       character (len = *), intent (in) :: var_name
       integer, intent (in) :: hinterp_opt
@@ -659,6 +660,7 @@
 
       real, dimension(:, :), allocatable :: var_wrf
       type (proj_lc_t) :: proj
+      integer :: ij, ifts, ifte, jfts, jfte
 
 
         ! Init
@@ -695,12 +697,30 @@
         ! Algorithm(s)
       Hinterp: select case (hinterp_opt)
         case (HINTERP_NEAREST)
-          call Interp_horizontal_nearest (var_wrf, proj, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
-              lats_in, lons_in, vals_out)
+          !$OMP PARALLEL DO   &
+          !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
+          do ij = 1, num_tiles
+            ifts = i_start(ij)
+            ifte = i_end(ij)
+            jfts = j_start(ij)
+            jfte = j_end(ij)
+            call Interp_horizontal_nearest (var_wrf, proj, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
+                lats_in, lons_in, vals_out)
+          end do
+          !$OMP END PARALLEL DO
 
         case (HINTERP_BILINEAR)
-          call Interp_horizontal_bilinear (var_wrf, proj, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
-              lats_in, lons_in, vals_out)
+          !$OMP PARALLEL DO   &
+          !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
+          do ij = 1, num_tiles
+            ifts = i_start(ij)
+            ifte = i_end(ij)
+            jfts = j_start(ij)
+            jfte = j_end(ij)
+            call Interp_horizontal_bilinear (var_wrf, proj, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
+                lats_in, lons_in, vals_out)
+          end do
+          !$OMP END PARALLEL DO
 
         case default
           call Stop_simulation ('The horizontal interpolation option selected does not exist.')
