@@ -648,8 +648,6 @@
     subroutine Interp_var2grid (this, lats_in, lons_in, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
         var_name, hinterp_opt, vals_out)
 
-      use, intrinsic :: iso_fortran_env, only : ERROR_UNIT
-
       implicit none
 
       class (wrf_t), intent(in) :: this
@@ -690,8 +688,8 @@
           var_wrf = this%va(this%ids:this%ide - 1, this%jds:this%jde - 1)
 
         case default
-          write (ERROR_UNIT, *) 'Unknown variable name to interpolate'
-          stop
+          call Stop_simulation ('Unknown variable name to interpolate')
+
       end select
 
         ! Algorithm(s)
