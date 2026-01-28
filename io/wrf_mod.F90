@@ -6,8 +6,8 @@
     use netcdf_mod, only : Get_netcdf_var, Get_netcdf_att, Get_netcdf_dim, Is_netcdf_file_present
     use proj_lc_mod, only : proj_lc_t
     use stderrout_mod, only : Print_message, Stop_simulation
-    use interp_mod, only : Interp_profile, Interp_horizontal_nearest, Interp_horizontal_bilinear, &
-        HINTERP_NEAREST, HINTERP_BILINEAR
+    use interp_mod, only : Interp_profile
+    use coupling_mod, only : Interp_horizontal
 
     implicit none
 
@@ -645,22 +645,22 @@
 
     end subroutine Get_latcloncs
 
-    subroutine Interp_var2grid (this, lats_in, lons_in, ifms, ifme, jfms, jfme, &
-        num_tiles, i_start, i_end, j_start, j_end, var_name, hinterp_opt, vals_out)
+    subroutine Interp_var2grid (this, lats_out, lons_out, ifms, ifme, jfms, jfme, &
+        num_tiles, i_start, i_end, j_start, j_end, var_name, hinterp_opt, data_out)
 
       implicit none
 
       class (wrf_t), intent(in) :: this
       integer, intent (in) :: ifms, ifme, jfms, jfme, num_tiles
       integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
-      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lats_in, lons_in
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lats_out, lons_out
       character (len = *), intent (in) :: var_name
       integer, intent (in) :: hinterp_opt
-      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: vals_out
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: data_out
 
       real, dimension(:, :), allocatable :: var_wrf
       type (proj_lc_t) :: proj
-      integer :: ij, ifts, ifte, jfts, jfte, ims, ime, jms, jme
+      integer :: ims, ime, jms, jme
 
 
         ! Init
@@ -694,42 +694,14 @@
 
       end select
 
+        ! Interpolate
       ims = 1
       ime = size (var_wrf, dim = 1)
       jms = 1
       jme = size (var_wrf, dim = 2)
-        ! Algorithm(s)
-      Hinterp: select case (hinterp_opt)
-        case (HINTERP_NEAREST)
-          !$OMP PARALLEL DO   &
-          !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
-          do ij = 1, num_tiles
-            ifts = i_start(ij)
-            ifte = i_end(ij)
-            jfts = j_start(ij)
-            jfte = j_end(ij)
-            call Interp_horizontal_nearest (var_wrf, proj, ims, ime, jms, jme, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
-                lats_in, lons_in, vals_out)
-          end do
-          !$OMP END PARALLEL DO
 
-        case (HINTERP_BILINEAR)
-          !$OMP PARALLEL DO   &
-          !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte)
-          do ij = 1, num_tiles
-            ifts = i_start(ij)
-            ifte = i_end(ij)
-            jfts = j_start(ij)
-            jfte = j_end(ij)
-            call Interp_horizontal_bilinear (var_wrf, proj, ims, ime, jms, jme, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
-                lats_in, lons_in, vals_out)
-          end do
-          !$OMP END PARALLEL DO
-
-        case default
-          call Stop_simulation ('The horizontal interpolation option selected does not exist.')
-
-      end select Hinterp
+      call Interp_horizontal (var_wrf, proj, ims, ime, jms, jme, ifms, ifme, jfms, jfme, &
+          num_tiles, i_start, i_end, j_start, j_end, hinterp_opt, lats_out, lons_out, data_out)
 
     end subroutine Interp_var2grid
 
