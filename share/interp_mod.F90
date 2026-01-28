@@ -12,7 +12,7 @@
 
   contains
 
-    subroutine Interp_horizontal_nearest (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
+    subroutine Interp_horizontal_nearest (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
         lats_out, lons_out, data_out)
 
     ! Purpose: Nearest neighbor interpolation/extrapolation
@@ -21,7 +21,7 @@
 
       real, dimension(:, :), intent (in) :: data_in
       type (proj_lc_t), intent (in) :: proj_data_in
-      integer, intent (in) :: ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe
+      integer, intent (in) :: ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte
       real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lats_out, lons_out
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: data_out
 
@@ -32,8 +32,8 @@
       nx_in = size (data_in, dim = 1)
       ny_in = size (data_in, dim = 2)
 
-      do j = jfps, jfpe
-        do i = ifps, ifpe
+      do j = jfts, jfte
+        do i = ifts, ifte
           call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
           i_in = min (max (1, nint (i_real)), nx_in)
           j_in = min (max (1, nint (j_real)), ny_in)
@@ -43,7 +43,7 @@
 
     end subroutine Interp_horizontal_nearest
 
-    subroutine Interp_horizontal_bilinear (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
+    subroutine Interp_horizontal_bilinear (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
         lats_out, lons_out, data_out)
 
     ! Purpose: bi-linear interpolation + nearest neighbor extrapolation
@@ -52,7 +52,7 @@
 
       real, dimension(:, :), intent (in) :: data_in
       type (proj_lc_t), intent (in) :: proj_data_in
-      integer, intent (in) :: ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe
+      integer, intent (in) :: ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte
       real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lats_out, lons_out
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: data_out
 
@@ -63,8 +63,8 @@
       nx_in = size (data_in, dim = 1)
       ny_in = size (data_in, dim = 2)
 
-      do j = jfps, jfpe
-        do i = ifps, ifpe
+      do j = jfts, jfte
+        do i = ifts, ifte
           call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
 
           i0 = max (1, min (nx_in - 1, int (floor (i_real))))
