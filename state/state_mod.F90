@@ -747,39 +747,37 @@
       integer :: i, j
 
 
-        ! We need the fire grid lat/lon
-      if (allocated (this%lats) .and. allocated (this%lons)) then
+      if (.not. allocated (this%lats) .or. .not. allocated (this%lons)) &
+          call Stop_simulation ('Init lats/lons before calling hinterp atm variables')
 
-        if (this%datetime_now == this%datetime_start) call wrf%Interp_var2grid (this%lats, this%lons, &
-            this%ifms, this%ifme, this%jfms, this%jfme, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
-            config_flags%hinterp_opt, this%fz0)
+      if (this%datetime_now == this%datetime_start) call wrf%Interp_var2grid (this%lats, this%lons, &
+          this%ifms, this%ifme, this%jfms, this%jfme, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
+          config_flags%hinterp_opt, this%fz0)
 
-        do j = 1, wrf%jde
-          do i = 1, wrf%ide
-            call this%Interpolate_profile (config_flags, config_flags%fire_wind_height, this%kfds, this%kfde, &
-                wrf%u3d_stag(i,:,j),wrf%v3d_stag(i,:,j), wrf%phl_stag(i,:,j), wrf%ua(i,j),wrf%va(i,j),wrf%z0_stag(i,j))
-          end do
+      do j = 1, wrf%jde
+        do i = 1, wrf%ide
+          call this%Interpolate_profile (config_flags, config_flags%fire_wind_height, this%kfds, this%kfde, &
+              wrf%u3d_stag(i,:,j),wrf%v3d_stag(i,:,j), wrf%phl_stag(i,:,j), wrf%ua(i,j),wrf%va(i,j),wrf%z0_stag(i,j))
         end do
+      end do
 
-        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-            this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', config_flags%hinterp_opt, this%uf)
+      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+          this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', config_flags%hinterp_opt, this%uf)
 
-        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-            this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', config_flags%hinterp_opt, this%vf)
+      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+          this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', config_flags%hinterp_opt, this%vf)
 
-        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-            this%ifps, this%ifpe, this%jfps, this%jfpe, 't2', config_flags%hinterp_opt, this%fire_t2)
+      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+          this%ifps, this%ifpe, this%jfps, this%jfpe, 't2', config_flags%hinterp_opt, this%fire_t2)
 
-        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-            this%ifps, this%ifpe, this%jfps, this%jfpe, 'q2', config_flags%hinterp_opt, this%fire_q2)
+      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+          this%ifps, this%ifpe, this%jfps, this%jfpe, 'q2', config_flags%hinterp_opt, this%fire_q2)
 
-        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-            this%ifps, this%ifpe, this%jfps, this%jfpe, 'psfc', config_flags%hinterp_opt, this%fire_psfc)
+      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+          this%ifps, this%ifpe, this%jfps, this%jfpe, 'psfc', config_flags%hinterp_opt, this%fire_psfc)
 
-        call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-            this%ifps, this%ifpe, this%jfps, this%jfpe, 'rain', config_flags%hinterp_opt, this%fire_rain)
-
-      end if
+      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+          this%ifps, this%ifpe, this%jfps, this%jfpe, 'rain', config_flags%hinterp_opt, this%fire_rain)
 
     end subroutine Interpolate_vars_atm_to_fire
 
