@@ -660,7 +660,7 @@
 
       real, dimension(:, :), allocatable :: var_wrf
       type (proj_lc_t) :: proj
-      integer :: ij, ifts, ifte, jfts, jfte
+      integer :: ij, ifts, ifte, jfts, jfte, ims, ime, jms, jme
 
 
         ! Init
@@ -694,6 +694,10 @@
 
       end select
 
+      ims = 1
+      ime = size (var_wrf, dim = 1)
+      jms = 1
+      jme = size (var_wrf, dim = 2)
         ! Algorithm(s)
       Hinterp: select case (hinterp_opt)
         case (HINTERP_NEAREST)
@@ -704,7 +708,7 @@
             ifte = i_end(ij)
             jfts = j_start(ij)
             jfte = j_end(ij)
-            call Interp_horizontal_nearest (var_wrf, proj, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
+            call Interp_horizontal_nearest (var_wrf, proj, ims, ime, jms, jme, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
                 lats_in, lons_in, vals_out)
           end do
           !$OMP END PARALLEL DO
@@ -717,7 +721,7 @@
             ifte = i_end(ij)
             jfts = j_start(ij)
             jfte = j_end(ij)
-            call Interp_horizontal_bilinear (var_wrf, proj, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
+            call Interp_horizontal_bilinear (var_wrf, proj, ims, ime, jms, jme, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
                 lats_in, lons_in, vals_out)
           end do
           !$OMP END PARALLEL DO

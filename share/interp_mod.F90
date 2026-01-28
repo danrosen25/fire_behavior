@@ -12,63 +12,57 @@
 
   contains
 
-    subroutine Interp_horizontal_nearest (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
+    subroutine Interp_horizontal_nearest (data_in, proj_data_in, ims, ime, jms, jme, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
         lats_out, lons_out, data_out)
 
     ! Purpose: Nearest neighbor interpolation/extrapolation
 
       implicit none
 
-      real, dimension(:, :), intent (in) :: data_in
       type (proj_lc_t), intent (in) :: proj_data_in
-      integer, intent (in) :: ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte
+      integer, intent (in) :: ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, ims, ime, jms, jme
+      real, dimension(ims:ime, jms:jme), intent (in) :: data_in
       real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lats_out, lons_out
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: data_out
 
-      integer :: i, j, i_in, j_in, nx_in, ny_in
+      integer :: i, j, i_in, j_in
       real :: i_real, j_real
 
-
-      nx_in = size (data_in, dim = 1)
-      ny_in = size (data_in, dim = 2)
 
       do j = jfts, jfte
         do i = ifts, ifte
           call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
-          i_in = min (max (1, nint (i_real)), nx_in)
-          j_in = min (max (1, nint (j_real)), ny_in)
+          i_in = min (max (ims, nint (i_real)), ime)
+          j_in = min (max (jms, nint (j_real)), ime)
           data_out(i, j) = data_in(i_in, j_in)
         end do
       end do
 
     end subroutine Interp_horizontal_nearest
 
-    subroutine Interp_horizontal_bilinear (data_in, proj_data_in, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
+    subroutine Interp_horizontal_bilinear (data_in, proj_data_in, ims, ime, jms, jme, ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, &
         lats_out, lons_out, data_out)
 
     ! Purpose: bi-linear interpolation + nearest neighbor extrapolation
 
       implicit none
 
-      real, dimension(:, :), intent (in) :: data_in
       type (proj_lc_t), intent (in) :: proj_data_in
-      integer, intent (in) :: ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte
+      integer, intent (in) :: ifms, ifme, jfms, jfme, ifts, ifte, jfts, jfte, ims, ime, jms, jme
+      real, dimension(ims:ime, jms:jme), intent (in) :: data_in
       real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lats_out, lons_out
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: data_out
 
-      integer :: i, j, i0, j0, i1, j1, nx_in, ny_in
+      integer :: i, j, i0, j0, i1, j1
       real :: i_real, j_real, di, dj
 
-
-      nx_in = size (data_in, dim = 1)
-      ny_in = size (data_in, dim = 2)
 
       do j = jfts, jfte
         do i = ifts, ifte
           call proj_data_in%Calc_ij (lats_out(i, j), lons_out(i, j), i_real, j_real)
 
-          i0 = max (1, min (nx_in - 1, int (floor (i_real))))
-          j0 = max (1, min (ny_in - 1, int (floor (j_real))))
+          i0 = max (ims, min (ime - 1, int (floor (i_real))))
+          j0 = max (jms, min (jme - 1, int (floor (j_real))))
           i1 = i0 + 1
           j1 = j0 + 1
 
