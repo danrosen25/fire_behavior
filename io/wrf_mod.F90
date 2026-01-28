@@ -7,6 +7,7 @@
     use proj_lc_mod, only : proj_lc_t
     use stderrout_mod, only : Print_message, Stop_simulation
     use interp_mod, only : Interp_profile
+    use coupling_mod, only : Interp_horizontal
 
     implicit none
 
@@ -47,7 +48,7 @@
       procedure, public :: Get_v3d => Get_meridional_wind_3d
       procedure, public :: Get_v3d_stag => Get_meridional_wind_stag_3d
       procedure, public :: Get_z0 => Get_z0
-      procedure, public :: Interp_var2grid_nearest => Interp_var2grid_nearest
+      procedure, public :: Interp_var2grid => Interp_var2grid
       procedure, public :: Print_domain => Print_domain
       procedure, public :: Update_atm_state => Update_atm_state
     end type wrf_t
@@ -644,39 +645,28 @@
 
     end subroutine Get_latcloncs
 
-    subroutine Interp_var2grid_nearest (this, lats_in, lons_in, var_name, vals_out)
-
-      use, intrinsic :: iso_fortran_env, only : ERROR_UNIT
+    subroutine Interp_var2grid (this, lats_out, lons_out, ifms, ifme, jfms, jfme, &
+        num_tiles, i_start, i_end, j_start, j_end, var_name, hinterp_opt, data_out)
 
       implicit none
 
       class (wrf_t), intent(in) :: this
-      real, dimension(:, :), intent(in) :: lats_in, lons_in
+      integer, intent (in) :: ifms, ifme, jfms, jfme, num_tiles
+      integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
+      real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lats_out, lons_out
       character (len = *), intent (in) :: var_name
-      real, dimension(:, :), allocatable, intent(out) :: vals_out
+      integer, intent (in) :: hinterp_opt
+      real, dimension(ifms:ifme, jfms:jfme), intent(in out) :: data_out
 
-      real, parameter :: DEFAULT_INIT = 0.0
-      real, dimension(:, :), allocatable :: ds, var_wrf
-      real :: d, i_real, j_real
+      real, dimension(:, :), allocatable :: var_wrf
       type (proj_lc_t) :: proj
-      integer :: nx, ny, nx_wrf, ny_wrf, i, j, i_wrf, j_wrf
+      integer :: ims, ime, jms, jme
 
 
         ! Init
-      nx_wrf = this%ide - 1
-      ny_wrf = this%jde - 1
-      nx = size (lats_in, dim = 1)
-      ny = size (lats_in, dim = 2)
-
-      if (allocated (vals_out)) deallocate (vals_out)
-      allocate (vals_out(nx, ny))
-      vals_out = DEFAULT_INIT
-
-      allocate (ds(nx, ny))
-      ds = huge (d)
-
       proj = this%Get_projection ()
 
+        ! Get WRF data
       select case (var_name)
         case ('t2')
           var_wrf = this%t2_stag(this%ids:this%ide - 1, this%jds:this%jde - 1)
@@ -700,25 +690,20 @@
           var_wrf = this%va(this%ids:this%ide - 1, this%jds:this%jde - 1)
 
         case default
-          write (ERROR_UNIT, *) 'Unknown variable name to interpolate'
-          stop
+          call Stop_simulation ('Unknown variable name to interpolate')
+
       end select
 
-        ! Algorithm
-      do j = 1, ny
-        do i = 1, nx
-          call proj%Calc_ij (lats_in(i, j), lons_in(i, j), i_real, j_real)
-          i_wrf = min (max (1, nint (i_real)), nx_wrf)
-          j_wrf = min (max (1, nint (j_real)), ny_wrf)
-          d = (this%lats(i_wrf, j_wrf) - lats_in(i, j)) ** 2 + (this%lons(i_wrf, j_wrf) - lons_in(i, j)) ** 2
-          if (d < ds(i, j)) then
-            vals_out(i, j) = var_wrf(i_wrf, j_wrf)
-            ds(i, j) = d
-          end if
-        end do
-      end do
+        ! Interpolate
+      ims = 1
+      ime = size (var_wrf, dim = 1)
+      jms = 1
+      jme = size (var_wrf, dim = 2)
 
-    end subroutine Interp_var2grid_nearest
+      call Interp_horizontal (var_wrf, proj, ims, ime, jms, jme, ifms, ifme, jfms, jfme, &
+          num_tiles, i_start, i_end, j_start, j_end, hinterp_opt, lats_out, lons_out, data_out)
+
+    end subroutine Interp_var2grid
 
     subroutine Interp_wrf2dvar_to_cfbm (wrfatm2dvar, ims, ime, jms, jme, ifms, ifme, jfms, jfme, ifps, ifpe, jfps, jfpe, &
         lats_in, lons_in, proj, vals_out)
