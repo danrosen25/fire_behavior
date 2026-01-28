@@ -114,7 +114,6 @@
       procedure :: Init_tiles => Init_tiles
       procedure :: Init_tiles_in_wrf => Init_tiles_in_wrf
       procedure :: Interpolate_vars_atm_to_fire => Interpolate_vars_atm_to_fire
-      procedure, public :: Interpolate_profile => Interpolate_profile
       procedure, public :: Print => Print_domain ! private
       procedure, public :: Print_tiles => Print_tiles
       procedure, public :: Save_state => Save_state
@@ -238,7 +237,7 @@
         if (DEBUG_LOCAL) call Print_message ('  Updating WRF atm state...')
         if (DEBUG_LOCAL) call this%datetime_now%Print_datetime ()
 
-        call wrf%Update_atm_state (this%datetime_now)
+        call wrf%Update_atm_state (this%datetime_now, config_flags)
 
         if (DEBUG_LOCAL) call Print_message ('  Interpolating WRF vars...')
         call this%Interpolate_vars_atm_to_fire(wrf, config_flags)
@@ -754,13 +753,6 @@
           this%ifms, this%ifme, this%jfms, this%jfme, config_flags%num_tiles, this%i_start, this%i_end, &
           this%j_start, this%j_end, 'fz0', config_flags%hinterp_opt, this%fz0)
 
-      do j = 1, wrf%jde
-        do i = 1, wrf%ide
-          call this%Interpolate_profile (config_flags, config_flags%fire_wind_height, this%kfds, this%kfde, &
-              wrf%u3d_stag(i,:,j),wrf%v3d_stag(i,:,j), wrf%phl_stag(i,:,j), wrf%ua(i,j),wrf%va(i,j),wrf%z0_stag(i,j))
-        end do
-      end do
-
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
           config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
           'uf', config_flags%hinterp_opt, this%uf)
@@ -786,94 +778,6 @@
           'rain', config_flags%hinterp_opt, this%fire_rain)
 
     end subroutine Interpolate_vars_atm_to_fire
-
-    subroutine Interpolate_profile (this, config_flags, fire_wind_height, kfds, kfde, &
-        uin, vin, phl, uout, vout,z0f)
-
-      implicit none
-
-      class (state_fire_t), intent (in) :: this
-      type (namelist_t), intent (in) :: config_flags
-      real, intent (in) :: fire_wind_height
-      integer, intent (in) :: kfds, kfde
-      real, intent (in) :: uin(:), vin(:), phl(:)
-      real, intent (out) :: uout, vout
-      real, intent (in) :: z0f
-
-
-      real, parameter :: VK_KAPPA = 0.4
-      real, dimension (kfds:kfde - 1) :: altw, hgt
-      integer :: k, kdmax
-      real :: loght, loglast, logz0, logfwh, ht, r_nan, fire_wind_height_local, z0fc, &
-          ust_d, wsf, wsf1, uf_temp, vf_temp
-
-
-        ! max layer to interpolate from, can be less
-      kdmax = kfde - 2
-      do k = kfds, kdmax + 1
-          ! altitude of the bottom w-point
-        altw(k) = phl(k) / G
-      end do
-
-      do k = kfds, kdmax
-          ! height of the mass point above the ground
-        hgt(k) = 0.5 * (altw(k) + altw(k + 1)) - altw(kfds)
-      end do
-
-        ! extrapolate mid-flame height from fire_lsm_zcoupling_ref?
-      if (config_flags%fire_lsm_zcoupling) then
-        logfwh = log (config_flags%fire_lsm_zcoupling_ref)
-        fire_wind_height_local = config_flags%fire_lsm_zcoupling_ref
-      else
-        logfwh = log (fire_wind_height)
-        fire_wind_height_local = fire_wind_height
-      end if
-
-        ! interpolate u
-      if (fire_wind_height_local > z0f)then
-        do k = kfds, kdmax
-          ht = hgt(k)
-          if (ht >= fire_wind_height_local) then
-              ! found layer k this point is in
-            loght = log(ht)
-            if (k == kfds) then
-                ! first layer, log linear interpolation from 0 at zr
-              logz0 = log(z0f)
-              uout = uin(k) * (logfwh - logz0) / (loght - logz0)
-              vout = vin(k) * (logfwh - logz0) / (loght - logz0)
-            else
-                ! log linear interpolation
-              loglast = log (hgt(k - 1))
-              uout = uin(k - 1) + (uin(k) - uin(k - 1)) * (logfwh - loglast) / (loght - loglast)
-              vout = vin(k - 1) + (vin(k) - vin(k - 1)) * (logfwh - loglast) / (loght - loglast)
-            end if
-            exit
-          end if
-          if (k == kdmax) then
-              ! last layer, still not high enough
-            uout = uin(k)
-            vout = vin(k)
-          end if
-        end do
-      else
-          ! roughness higher than the fire wind height
-        uout = 0.0
-        vout = 0.0
-      end if
-
-        ! Extrapol wind to target height
-      if (config_flags%fire_lsm_zcoupling) then
-        uf_temp = uout
-        vf_temp = vout
-        wsf = max (sqrt (uf_temp ** 2.0 + vf_temp ** 2.0), 0.1)
-        z0fc = z0f
-        ust_d = wsf * VK_KAPPA / log(config_flags%fire_lsm_zcoupling_ref / z0fc)
-        wsf1 = (ust_d / VK_KAPPA) * log((fire_wind_height + z0fc) / z0fc)
-        uout = wsf1 * uf_temp / wsf
-        vout = wsf1 * vf_temp / wsf
-      end if
-
-    end subroutine Interpolate_profile
 
     subroutine Print_domain (this)
 

@@ -1067,12 +1067,13 @@
 
     end subroutine Fire_tendency
 
-    subroutine Update_atm_state (this, datetime_now)
+    subroutine Update_atm_state (this, datetime_now, config_flags)
 
       implicit none
 
       class (wrf_t), intent(in out) :: this
       type (datetime_t), intent (in) :: datetime_now
+      type (namelist_t), intent (in) :: config_flags
 
       integer :: i, j, k
 
@@ -1134,6 +1135,13 @@
           end do
         end do
         call this%Destroy_phl ()
+
+       do j = 1, this%jde - 1
+        do i = 1, this%ide - 1
+          call Interp_profile (config_flags%fire_lsm_zcoupling, config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, this%kds, this%kde, &
+              this%u3d_stag(i, :, j), this%v3d_stag(i, :, j), this%phl_stag(i, :, j) / G, this%z0_stag(i, j), this%ua(i, j), this%va(i, j))
+        end do
+      end do
 
     end subroutine Update_atm_state
 

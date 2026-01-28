@@ -18,6 +18,7 @@ module fire_behavior_nuopc
   use advance_mod, only : Advance_state
   use constants_mod, only : G, XLV, CP, FVIRT, R_D
   use stderrout_mod, only : Stop_simulation
+  use interp_mod, only : Interp_profile
 
   implicit none
 
@@ -844,12 +845,14 @@ module fire_behavior_nuopc
       case (0)
         do j = grid%jfps, grid%jfpe
           do i = grid%ifps, grid%ifpe
-            call grid%Interpolate_profile (config_flags,  & ! for debug output, <= 0 no output
-                config_flags%fire_wind_height,           & ! interpolation height
-                grid%kfds, grid%kfde,                    & ! fire grid dimensions
-                atm_u3d(i,j,:),atm_v3d(i,j,:),           & ! atm grid arrays in
-                atm_ph(i,j,:),                           &
-                grid%uf(i,j),grid%vf(i,j),grid%fz0(i,j))
+            call Interp_profile (config_flags%fire_lsm_zcoupling,  &
+                config_flags%fire_lsm_zcoupling_ref, &
+                config_flags%fire_wind_height, &
+                grid%kfds, grid%kfde, &
+                atm_u3d(i, j, :), atm_v3d(i, j, :), &
+                atm_ph(i, j, :) / 9.81, &
+                grid%fz0(i, j), &
+                grid%uf(i, j), grid%vf(i, j))
 
             ! avoid arithmatic error
             wspd = (grid%uf(i,j) ** 2. + grid%vf(i,j) ** 2.) ** .5
