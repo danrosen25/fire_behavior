@@ -61,8 +61,9 @@
 
     end subroutine Interp_horizontal
 
-    subroutine Calc_fire_wind (u3d, v3d, z_at_w, z0, iims, iime, jims, jime, kims, kime, fire_lsm_zcoupling, fire_lsm_zcoupling_ref, &
-        fire_wind_height, ioms, iome, joms, jome, iops, iope, jops, jope, u_out, v_out, cap_winds)
+    subroutine Calc_fire_wind (u3d, v3d, z_at_w, z0, iims, iime, jims, jime, kims, kime, fire_lsm_zcoupling, &
+        fire_lsm_zcoupling_ref, fire_wind_height, ioms, iome, joms, jome, iops, iope, jops, jope, &
+        u_out, v_out, cap_winds)
 
       implicit none
 

@@ -104,6 +104,7 @@
       integer :: px, py ! Number of MPI tasks in X and Y, respectively
     contains
       procedure, public :: Allocate_vars => Allocate_vars
+      procedure, public :: Apply_wafs => Apply_wafs
       procedure, public :: Convert_sb_to_ander => Convert_scottburgan_to_anderson
       procedure, public :: Handle_output => Handle_output
       procedure, public :: Handle_wrfdata_update => Handle_wrfdata_update
@@ -174,6 +175,36 @@
       allocate (this%emis_smoke(ifms:ifme, jfms:jfme))
 
     end subroutine Allocate_vars
+
+    subroutine Apply_wafs (this)
+
+      implicit none
+
+      class (state_fire_t), intent(in out) :: this
+
+      integer :: i, j, ij, ifts, ifte, jfts, jfte
+      real :: waf
+
+
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte, waf)
+      do ij = 1, this%num_tiles
+        ifts = this%i_start(ij)
+        ifte = this%i_end(ij)
+        jfts = this%j_start(ij)
+        jfte = this%j_end(ij)
+
+        do j = jfts, jfte
+          do i = ifts, ifte
+            waf = this%fuels%waf(int (this%nfuel_cat(i, j)))
+            this%uf(i, j) = waf * this%uf(i, j)
+            this%vf(i, j) = waf * this%vf(i, j)
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+    end subroutine Apply_wafs
 
     subroutine Convert_scottburgan_to_anderson (this)
 
@@ -740,7 +771,7 @@
       implicit none
 
       class (state_fire_t), intent(in out) :: this
-      type (wrf_t), intent(inout) :: wrf
+      type (wrf_t), intent(in out) :: wrf
       type (namelist_t), intent (in) :: config_flags
 
       integer :: i, j
@@ -760,6 +791,8 @@
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
           config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
           'vf', config_flags%hinterp_opt, this%vf)
+
+      if (config_flags%wind_vinterp_opt == 1) call this%Apply_wafs ()
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
           config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &

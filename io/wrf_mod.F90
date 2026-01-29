@@ -21,7 +21,7 @@
     type :: wrf_t
       character (len = 300) :: file_name
       real, dimension(:, :, :), allocatable :: u3d, v3d, phl
-      real, dimension(:, :), allocatable :: lats, lons, lats_c, lons_c, t2, q2, z0, psfc, rain, ua, va
+      real, dimension(:, :), allocatable :: lats, lons, lats_c, lons_c, t2, q2, z0, psfc, rain, ua, va, u10, v10
       integer :: ids, ide, jds, jde, kds, kde, ims, ime, jms, jme, kms, kme, its, ite, jts, jte, kts, kte
       real :: cen_lat, cen_lon, dx, dy, truelat1, truelat2, stand_lon
     contains
@@ -30,6 +30,8 @@
       procedure, public :: Destroy_rain => Destroy_rain
       procedure, public :: Destroy_q2 => Destroy_specific_humidity_2m
       procedure, public :: Destroy_t2 => Destroy_temperature_2m
+      procedure, public :: Destroy_u10 => Destroy_zonal_wind10
+      procedure, public :: Destroy_v10 => Destroy_meridional_wind10
       procedure, public :: Destroy_u3d => Destroy_zonal_wind
       procedure, public :: Destroy_v3d => Destroy_meridional_wind
       procedure, public :: Destroy_z0 => Destroy_z0
@@ -42,8 +44,10 @@
       procedure, public :: Get_psfc => Get_surface_pressure
       procedure, public :: Get_q2 => Get_specific_humidity_2m
       procedure, public :: Get_t2 => Get_temperature_2m
+      procedure, public :: Get_u10 => Get_zonal_wind10
       procedure, public :: Get_u3d => Get_zonal_wind_3d
       procedure, public :: Get_u3d_stag => Get_zonal_wind_stag_3d
+      procedure, public :: Get_v10 => Get_meridional_wind10
       procedure, public :: Get_v3d => Get_meridional_wind_3d
       procedure, public :: Get_v3d_stag => Get_meridional_wind_stag_3d
       procedure, public :: Get_z0 => Get_z0
@@ -154,6 +158,16 @@
 
     end subroutine Destroy_meridional_wind
 
+    subroutine Destroy_meridional_wind10 (this)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+
+      if (allocated(this%v10)) deallocate (this%v10)
+
+    end subroutine Destroy_meridional_wind10
+
     subroutine Destroy_rain (this)
 
       implicit none
@@ -213,6 +227,16 @@
       if (allocated(this%u3d)) deallocate (this%u3d)
 
     end subroutine Destroy_zonal_wind
+
+    subroutine Destroy_zonal_wind10 (this)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+
+      if (allocated(this%u10)) deallocate (this%u10)
+
+    end subroutine Destroy_zonal_wind10
 
     function Get_datetime_index (this, datetime) result (return_value)
 
@@ -281,6 +305,23 @@
       deallocate (var4d, var4d2)
 
     end subroutine Get_geopotential_levels
+
+    subroutine Get_meridional_wind10 (this, datetime)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+      type (datetime_t), intent (in) :: datetime
+
+      real, dimension(:, :, :), allocatable :: var3d
+      integer :: nt
+
+
+      nt = this%Get_datetime_index (datetime)
+      call Get_netcdf_var (trim (this%file_name), 'V10', var3d)
+      this%v10 = var3d(:, :, nt)
+
+    end subroutine Get_meridional_wind10
 
     subroutine Get_meridional_wind_3d (this, datetime)
 
@@ -436,6 +477,23 @@
       this%z0 = var3d(:, :, nt)
 
     end subroutine Get_z0
+
+    subroutine Get_zonal_wind10 (this, datetime)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+      type (datetime_t), intent (in) :: datetime
+
+      real, dimension(:, :, :), allocatable :: var3d
+      integer :: nt
+
+
+      nt = this%Get_datetime_index (datetime)
+      call Get_netcdf_var (trim (this%file_name), 'U10', var3d)
+      this%u10 = var3d(:, :, nt)
+
+    end subroutine Get_zonal_wind10
 
     subroutine Get_zonal_wind_3d (this, datetime)
 
@@ -1072,37 +1130,53 @@
       call this%Get_psfc (datetime_now)
       call this%Get_rain (datetime_now)
       call this%Get_z0 (datetime_now)
-      call this%Get_u3d (datetime_now)
-      call this%Get_v3d (datetime_now)
-      call this%Get_phl (datetime_now)
 
-        ! Set input (i) and output (o) indices
-      iims = this%ids
-      iime = this%ide - 1
-      jims = this%ids
-      jime = this%ide - 1
-      kims = this%kds
-      kime = this%kde - 1
+      select case (config_flags%wind_vinterp_opt)
+        case (0)
+          call this%Get_u3d (datetime_now)
+          call this%Get_v3d (datetime_now)
+          call this%Get_phl (datetime_now)
 
-      ioms = this%ids
-      iome = this%ide - 1
-      joms = this%ids
-      jome = this%ide - 1
+            ! Set input (i) and output (o) indices
+          iims = this%ids
+          iime = this%ide - 1
+          jims = this%ids
+          jime = this%ide - 1
+          kims = this%kds
+          kime = this%kde - 1
 
-      iops = this%ids
-      iope = this%ide - 1
-      jops = this%ids
-      jope = this%ide - 1
-                                               ! For compatibility with nuopc couplings
-                                               ! pass z_at_w with vertical dim kde - 1 instead of kde
-      call Calc_fire_wind (this%u3d, this%v3d, this%phl(iims:iime, jims:jime, kims:kime) / G, this%z0, &
-          iims, iime, jims, jime, kims, kime, config_flags%fire_lsm_zcoupling, config_flags%fire_lsm_zcoupling_ref, &
-          config_flags%fire_wind_height, ioms, iome, joms, jome, iops, iope, jops, jope, this%ua, this%va)
+          ioms = this%ids
+          iome = this%ide - 1
+          joms = this%ids
+          jome = this%ide - 1
 
-!      call this%Destroy_z0 ()
-      call this%Destroy_u3d ()
-      call this%Destroy_v3d ()
-      call this%Destroy_phl ()
+          iops = this%ids
+          iope = this%ide - 1
+          jops = this%ids
+          jope = this%ide - 1
+                                                   ! For compatibility with nuopc couplings
+                                                   ! pass z_at_w with vertical dim kde - 1 instead of kde
+          call Calc_fire_wind (this%u3d, this%v3d, this%phl(iims:iime, jims:jime, kims:kime) / G, this%z0, &
+              iims, iime, jims, jime, kims, kime, config_flags%fire_lsm_zcoupling, config_flags%fire_lsm_zcoupling_ref, &
+              config_flags%fire_wind_height, ioms, iome, joms, jome, iops, &
+              iope, jops, jope, this%ua, this%va)
+
+          call this%Destroy_u3d ()
+          call this%Destroy_v3d ()
+          call this%Destroy_phl ()
+!          call this%Destroy_z0 ()
+
+        case (1)
+          call this%Get_u10 (datetime_now)
+          call this%Get_v10 (datetime_now)
+
+          this%ua = this%u10
+          this%va = this%v10
+
+        case default
+          call Stop_simulation ('Error: wrong wind_vinterp_opt')
+
+      end select
 
     end subroutine Update_atm_state
 

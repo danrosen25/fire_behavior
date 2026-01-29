@@ -91,10 +91,6 @@
         if (DEBUG_LOCAL) call Print_message ('    Initializing fire state')
         call grid%Initialization (config_flags, geogrid)
 
-        if (present (wrf)) then
-          if (DEBUG_LOCAL) call Print_message ('    Initializing atmospheric state')
-          call grid%Handle_wrfdata_update (wrf, config_flags)
-        end if
       else
           ! Ideal
         if (DEBUG_LOCAL) call Print_message ('    Initializing fire state')
@@ -102,6 +98,11 @@
       end if
 
       call Init_fire_components (grid, config_flags)
+
+      if (present (wrf)) then
+        if (DEBUG_LOCAL) call Print_message ('    Initializing atmospheric state')
+        call grid%Handle_wrfdata_update (wrf, config_flags)
+      end if
 
       if (DEBUG_LOCAL) then
           ! print lat/lons

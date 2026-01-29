@@ -861,9 +861,9 @@ module fire_behavior_nuopc
       jops = grid%jfps
       jope = grid%jfpe
 
-      call Calc_fire_wind (atm_u3d, atm_v3d, atm_ph / 9.81, grid%fz0, iims, iime, jims, jime, kims, kime, config_flags%fire_lsm_zcoupling, &
-          config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, ioms, iome, joms, jome, iops, iope, jops, jope, &
-          grid%uf, grid%vf, cap_winds = .true.)
+      call Calc_fire_wind (atm_u3d, atm_v3d, atm_ph / 9.81, grid%fz0, iims, iime, jims, jime, kims, kime, &
+          config_flags%fire_lsm_zcoupling,  config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, &
+          ioms, iome, joms, jome, iops, iope, jops, jope, grid%uf, grid%vf, cap_winds = .true.)
 
       case (1)
         do j = grid%jfps, grid%jfpe
@@ -874,6 +874,7 @@ module fire_behavior_nuopc
         end do
       case default
         call Stop_simulation ('Error: wrong wind_vinterp_opt')
+
     end select
 
     if (grid%datetime_now == grid%datetime_start) call grid%Save_state ()
