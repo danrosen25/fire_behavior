@@ -109,11 +109,16 @@ module wrf_nuopc
 
     call Init_atm_state(state, config_flags)
 
-    allocate (state%q2(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%t2(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%z0(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%psfc(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%rain(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%q2)) &
+        allocate (state%q2(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%t2)) &
+        allocate (state%t2(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%z0)) &
+        allocate (state%z0(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%psfc)) &
+        allocate (state%psfc(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%rain)) &
+        allocate (state%rain(size(state%lats, dim=1), size(state%lats, dim=2)))
     allocate (state%u3d(size(state%lats, dim=1), size(state%lats, dim=2), state%kde - 1))
     allocate (state%v3d(size(state%lats, dim=1), size(state%lats, dim=2), state%kde - 1))
     allocate (state%phl(size(state%lats, dim=1), size(state%lats, dim=2), state%kde - 1))

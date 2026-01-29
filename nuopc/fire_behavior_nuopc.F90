@@ -18,7 +18,7 @@ module fire_behavior_nuopc
   use advance_mod, only : Advance_state
   use constants_mod, only : G, XLV, CP, FVIRT, R_D
   use stderrout_mod, only : Stop_simulation
-  use interp_mod, only : Interp_profile
+  use coupling_mod, only : Calc_fire_wind
 
   implicit none
 
@@ -771,13 +771,13 @@ module fire_behavior_nuopc
     real(ESMF_KIND_R8)          :: ts
     type(ESMF_State)            :: importState, exportState
     integer                     :: i, j
-    real                        :: wspd, q0, rho
+    real                        :: q0, rho
     character(len=160)          :: msgString
     real, dimension(:, :, :), allocatable :: atm_u3d, atm_v3d, atm_ph
     real, dimension(:, :), allocatable :: atm_lowest_t, atm_lowest_q, atm_lowest_pres
     real, dimension(:, :), allocatable :: grnhfx_kinematic, grnqfx_kinematic, smoke
     real :: dtratio
-
+    integer :: iims, iime, jims, jime, kims, kime, ioms, iome, joms, jome, iops, iope, jops, jope
 
     rc = ESMF_SUCCESS
 
@@ -843,26 +843,28 @@ module fire_behavior_nuopc
 
     select case (config_flags%wind_vinterp_opt)
       case (0)
-        do j = grid%jfps, grid%jfpe
-          do i = grid%ifps, grid%ifpe
-            call Interp_profile (config_flags%fire_lsm_zcoupling,  &
-                config_flags%fire_lsm_zcoupling_ref, &
-                config_flags%fire_wind_height, &
-                grid%kfds, grid%kfde, &
-                atm_u3d(i, j, :), atm_v3d(i, j, :), &
-                atm_ph(i, j, :) / 9.81, &
-                grid%fz0(i, j), &
-                grid%uf(i, j), grid%vf(i, j))
 
-            ! avoid arithmatic error
-            wspd = (grid%uf(i,j) ** 2. + grid%vf(i,j) ** 2.) ** .5
-            if (wspd < 0.001) then
-              grid%uf(i,j) = sign(0.001, grid%uf(i,j))
-              grid%vf(i,j) = sign(0.001, grid%vf(i,j))
-            endif
+      iims = grid%ifps
+      iime = grid%ifpe
+      jims = grid%jfps
+      jime = grid%jfpe
+      kims = grid%kfds
+      kime = grid%kfde - 1
 
-          enddo
-        enddo
+      ioms = grid%ifms
+      iome = grid%ifme
+      joms = grid%jfms
+      jome = grid%jfme
+
+      iops = grid%ifps
+      iope = grid%ifpe
+      jops = grid%jfps
+      jope = grid%jfpe
+
+      call Calc_fire_wind (atm_u3d, atm_v3d, atm_ph / 9.81, grid%fz0, iims, iime, jims, jime, kims, kime, config_flags%fire_lsm_zcoupling, &
+          config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, ioms, iome, joms, jome, iops, iope, jops, jope, &
+          grid%uf, grid%vf, cap_winds = .true.)
+
       case (1)
         do j = grid%jfps, grid%jfpe
           do i = grid%ifps, grid%ifpe

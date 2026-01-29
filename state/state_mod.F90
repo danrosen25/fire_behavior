@@ -408,13 +408,13 @@
           this%jfps = jps
           this%jfpe = jpe
 
-          this%kfds = config_flags%kds
+          this%kfds = 1
           this%kfde = config_flags%kde
-          this%kfms = config_flags%kds
+          this%kfms = 1
           this%kfme = config_flags%kde
-          this%kfps = config_flags%kds
+          this%kfps = 1
           this%kfpe = config_flags%kde
-          this%kfts = config_flags%kds
+          this%kfts = 1
           this%kfte = config_flags%kde
 
           call this%Init_tiles (config_flags)

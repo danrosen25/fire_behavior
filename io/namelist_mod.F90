@@ -139,7 +139,7 @@
       real :: true_lat_2 = LAT_DEFAULT
 
         ! Atmosphere
-      integer :: kds = 1, kde = 1
+      integer :: kde = 1
     contains
       procedure, public :: Broadcast_nml => Broadcast_nml
       procedure, public :: Check_nml => Check_nml
