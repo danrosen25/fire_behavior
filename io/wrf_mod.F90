@@ -1102,10 +1102,10 @@
         call this%Destroy_z0 ()
 
           ! Update U3D
-        call this%Get_u3d_stag (datetime_now)
+        call this%Get_u3d (datetime_now)
 
           ! Update V3D
-        call this%Get_v3d_stag (datetime_now)
+        call this%Get_v3d (datetime_now)
 
           ! Update geopotential heights
         call this%Get_phl (datetime_now)
@@ -1116,6 +1116,8 @@
 
       call Calc_fire_wind (this%u3d(:this%ide-1, :, :), this%v3d(:, :this%jde-1, :), this%phl / G, this%z0_stag(:this%ide-1,:this%jde-1), config_flags%fire_lsm_zcoupling, &
           config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, this%ua(:this%ide-1, :this%jde-1), this%va(:this%ide-1, :this%jde-1))
+!      call Calc_fire_wind (this%u3d, this%v3d, this%phl / G, this%z0_stag(:this%ide-1,:this%jde-1), config_flags%fire_lsm_zcoupling, &
+!          config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, this%ua(:this%ide-1, :this%jde-1), this%va(:this%ide-1, :this%jde-1))
 
     end subroutine Update_atm_state
 
