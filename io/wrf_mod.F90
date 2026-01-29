@@ -7,7 +7,7 @@
     use proj_lc_mod, only : proj_lc_t
     use stderrout_mod, only : Print_message, Stop_simulation
     use interp_mod, only : Interp_profile
-    use coupling_mod, only : Interp_horizontal
+    use coupling_mod, only : Interp_horizontal, Calc_fire_wind
 
     implicit none
 
@@ -1075,8 +1075,6 @@
       type (datetime_t), intent (in) :: datetime_now
       type (namelist_t), intent (in) :: config_flags
 
-      integer :: i, j, k
-
 
           ! Update t2_stag
         call this%Get_t2 (datetime_now)
@@ -1105,45 +1103,20 @@
 
           ! Update U3D
         call this%Get_u3d_stag (datetime_now)
-        do k = this%kds, this%kde - 1
-          do j = this%jds, this%jde - 1
-            do i = this%ids, this%ide
-              this%u3d_stag(i, k, j) = this%u3d(i, j, k)
-            end do
-          end do
-        end do
-        call this%Destroy_u3d ()
 
           ! Update V3D
         call this%Get_v3d_stag (datetime_now)
-        do k = this%kds, this%kde - 1
-          do j = this%jds, this%jde
-            do i = this%ids, this%ide - 1
-              this%v3d_stag(i, k, j) = this%v3d(i, j, k)
-            end do
-          end do
-        end do
-        call this%Destroy_v3d ()
 
           ! Update geopotential heights
         call this%Get_phl (datetime_now)
-        do k = this%kds, this%kde
-          do j = this%jds, this%jde - 1
-            do i = this%ids, this%ide - 1
-              this%phl_stag(i, k, j) = this%phl(i, j, k)
-            end do
-          end do
-        end do
-        call this%Destroy_phl ()
 
-       do j = 1, this%jde - 1
-        do i = 1, this%ide - 1
-          call Interp_profile (config_flags%fire_lsm_zcoupling, config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, this%kds, this%kde, &
-              this%u3d_stag(i, :, j), this%v3d_stag(i, :, j), this%phl_stag(i, :, j) / G, this%z0_stag(i, j), this%ua(i, j), this%va(i, j))
-        end do
-      end do
+!        call this%Destroy_u3d ()
+!        call this%Destroy_v3d ()
+!        call this%Destroy_phl ()
+
+      call Calc_fire_wind (this%u3d(:this%ide-1, :, :), this%v3d(:, :this%jde-1, :), this%phl / G, this%z0_stag(:this%ide-1,:this%jde-1), config_flags%fire_lsm_zcoupling, &
+          config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, this%ua(:this%ide-1, :this%jde-1), this%va(:this%ide-1, :this%jde-1))
 
     end subroutine Update_atm_state
 
   end module wrf_mod
-

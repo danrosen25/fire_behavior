@@ -1,15 +1,14 @@
   module coupling_mod
 
     use proj_lc_mod, only : proj_lc_t
-    use interp_mod, only : Interp_horizontal_nearest, Interp_horizontal_bilinear, HINTERP_NEAREST, HINTERP_BILINEAR
+    use interp_mod, only : Interp_horizontal_nearest, Interp_horizontal_bilinear, HINTERP_NEAREST, HINTERP_BILINEAR, Interp_profile
     use stderrout_mod, only : Stop_simulation
-
 
     implicit none
 
     private
 
-    public :: Interp_horizontal
+    public :: Interp_horizontal, Calc_fire_wind
 
   contains
 
@@ -61,5 +60,36 @@
       end select Hinterp
 
     end subroutine Interp_horizontal
+
+    subroutine Calc_fire_wind (u3d, v3d, z_at_w, z0, fire_lsm_zcoupling, fire_lsm_zcoupling_ref, fire_wind_height, ua, va)
+
+      implicit none
+
+      real, intent (in) :: fire_wind_height, fire_lsm_zcoupling_ref
+      logical, intent (in) :: fire_lsm_zcoupling
+      real, dimension(:, :, :), intent (in) :: u3d, v3d, z_at_w
+      real, dimension(:, :), intent (in) :: z0
+      real, dimension(:, :), intent (out) :: ua, va
+
+      integer :: i, j, kds, kde
+
+
+!      print *, 'shape u3d = ', shape (u3d)
+!      print *, 'shape v3d = ', shape (v3d)
+!      print *, 'shape z_at_w = ', shape (z_at_w)
+!      print *, 'shape ua = ', shape (ua)
+!      print *, 'shape va = ', shape (va)
+!      print *, 'shape z0 = ', shape (z0)
+
+      kds = 1
+      kde = size (z_at_w, dim = 3)
+      do j = 1, size (ua, dim = 2)
+        do i = 1, size (ua, dim = 1)
+          call Interp_profile (fire_lsm_zcoupling, fire_lsm_zcoupling_ref, fire_wind_height, kds, kde, &
+              u3d(i, j, :), v3d(i, j, :), z_at_w(i, j, :), z0(i, j), ua(i, j), va(i, j))
+        end do
+      end do
+
+    end subroutine Calc_fire_wind
 
   end module coupling_mod
