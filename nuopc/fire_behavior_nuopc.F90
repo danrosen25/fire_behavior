@@ -860,8 +860,9 @@ module fire_behavior_nuopc
       iope = grid%ifpe
       jops = grid%jfps
       jope = grid%jfpe
-
-      call Calc_fire_wind (atm_u3d, atm_v3d, atm_ph / 9.81, grid%fz0, iims, iime, jims, jime, kims, kime, &
+                                                           ! pass the z0 array without halos
+                                                           ! for compatibility with offline sims
+      call Calc_fire_wind (atm_u3d, atm_v3d, atm_ph / 9.81, grid%fz0(iims:iime, jims:jime), iims, iime, jims, jime, kims, kime, &
           config_flags%fire_lsm_zcoupling,  config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, &
           ioms, iome, joms, jome, iops, iope, jops, jope, grid%uf, grid%vf, cap_winds = .true.)
 
