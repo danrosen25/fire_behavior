@@ -1129,10 +1129,10 @@
       call this%Get_q2 (datetime_now)
       call this%Get_psfc (datetime_now)
       call this%Get_rain (datetime_now)
-      call this%Get_z0 (datetime_now)
 
       select case (config_flags%wind_vinterp_opt)
         case (VINTERP_WINDS_FROM_3D_WINDS)
+          call this%Get_z0 (datetime_now)
           call this%Get_u3d (datetime_now)
           call this%Get_v3d (datetime_now)
           call this%Get_phl (datetime_now)
@@ -1164,7 +1164,7 @@
           call this%Destroy_u3d ()
           call this%Destroy_v3d ()
           call this%Destroy_phl ()
-!          call this%Destroy_z0 ()
+          call this%Destroy_z0 ()
 
         case (VINTERP_WINDS_FROM_10M_WINDS)
           call this%Get_u10 (datetime_now)
