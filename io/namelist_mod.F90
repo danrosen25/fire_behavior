@@ -49,7 +49,7 @@
       integer :: fast_dist_reinit_freq = 600  ! Number of time steps to perform a reinit with fast distance reinit method
 
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
-      integer :: wind_vinterp_opt = 0         ! "mid-flame height wind interpolation option: 0) Interp to specified height, 1) Use WAFs"
+      integer :: wind_vinterp_opt = 1         ! "mid-flame height wind interpolation option: 0) Interp to specified height, 1) Use WAFs"
       integer :: hinterp_opt = 2              ! "Horizontal interpolation from atm to fire (offline option): 1) ngp, 2)bi-linear"
       logical :: fire_lsm_zcoupling = .false. ! "flag to activate reference velocity at a different height from fire_wind_height"
       real :: fire_lsm_zcoupling_ref = 50.0   ! "reference height from wich u at fire_wind_hegiht is calculated using a logarithmic profile" "m"
@@ -411,7 +411,7 @@
       integer :: fmoist_freq = 0              ! "frequency to run moisture model 0: use fmoist_dt, k>0: every k timesteps" "1"
       real :: fmoist_dt = 600                 ! "moisture model time step" "s"
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
-      integer :: wind_vinterp_opt = 0         ! "mid-flame height wind interpolation option: 0) Interp to specified height, 1) Use WAFs"
+      integer :: wind_vinterp_opt = 1         ! "mid-flame height wind interpolation option: 0) Interp to specified height, 1) Use WAFs"
       integer :: hinterp_opt = 2              ! "Horizontal interpolation from atm to fire (offline option): 1) ngp, 2) bi-linear"
       logical :: fire_is_real_perim = .false. ! .false. = point/line ignition, .true. = observed perimeter"
       real :: frac_fburnt_to_smoke = 0.02     ! "parts per unit of burned fuel becoming smoke " "g_smoke/kg_air"
