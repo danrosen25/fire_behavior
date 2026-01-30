@@ -728,13 +728,10 @@
         case ('rain')
           var_wrf = this%rain
 
-        case ('fz0')
-          var_wrf = this%z0
-
-        case ('uf')
+        case ('ua')
           var_wrf = this%ua
 
-        case ('vf')
+        case ('va')
           var_wrf = this%va
 
         case default
