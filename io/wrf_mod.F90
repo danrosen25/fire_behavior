@@ -6,8 +6,8 @@
     use netcdf_mod, only : Get_netcdf_var, Get_netcdf_att, Get_netcdf_dim, Is_netcdf_file_present
     use proj_lc_mod, only : proj_lc_t
     use stderrout_mod, only : Print_message, Stop_simulation
-    use interp_mod, only : Interp_profile
-    use coupling_mod, only : Interp_horizontal
+    use interp_mod, only : Interp_profile, VINTERP_WINDS_FROM_3D_WINDS, VINTERP_WINDS_FROM_10M_WINDS
+    use coupling_mod, only : Interp_horizontal, Calc_fire_wind
 
     implicit none
 
@@ -20,9 +20,8 @@
 
     type :: wrf_t
       character (len = 300) :: file_name
-      real, dimension(:, :, :), allocatable :: u3d, v3d, phl, u3d_stag, v3d_stag, phl_stag
-      real, dimension(:, :), allocatable :: lats, lons, lats_c, lons_c, t2, q2, z0, psfc, rain, ua, va, &
-          t2_stag, q2_stag, z0_stag, psfc_stag, rain_stag
+      real, dimension(:, :, :), allocatable :: u3d, v3d, phl
+      real, dimension(:, :), allocatable :: lats, lons, lats_c, lons_c, t2, q2, z0, psfc, rain, ua, va, u10, v10
       integer :: ids, ide, jds, jde, kds, kde, ims, ime, jms, jme, kms, kme, its, ite, jts, jte, kts, kte
       real :: cen_lat, cen_lon, dx, dy, truelat1, truelat2, stand_lon
     contains
@@ -31,6 +30,8 @@
       procedure, public :: Destroy_rain => Destroy_rain
       procedure, public :: Destroy_q2 => Destroy_specific_humidity_2m
       procedure, public :: Destroy_t2 => Destroy_temperature_2m
+      procedure, public :: Destroy_u10 => Destroy_zonal_wind10
+      procedure, public :: Destroy_v10 => Destroy_meridional_wind10
       procedure, public :: Destroy_u3d => Destroy_zonal_wind
       procedure, public :: Destroy_v3d => Destroy_meridional_wind
       procedure, public :: Destroy_z0 => Destroy_z0
@@ -43,8 +44,10 @@
       procedure, public :: Get_psfc => Get_surface_pressure
       procedure, public :: Get_q2 => Get_specific_humidity_2m
       procedure, public :: Get_t2 => Get_temperature_2m
+      procedure, public :: Get_u10 => Get_zonal_wind10
       procedure, public :: Get_u3d => Get_zonal_wind_3d
       procedure, public :: Get_u3d_stag => Get_zonal_wind_stag_3d
+      procedure, public :: Get_v10 => Get_meridional_wind10
       procedure, public :: Get_v3d => Get_meridional_wind_3d
       procedure, public :: Get_v3d_stag => Get_meridional_wind_stag_3d
       procedure, public :: Get_z0 => Get_z0
@@ -155,6 +158,16 @@
 
     end subroutine Destroy_meridional_wind
 
+    subroutine Destroy_meridional_wind10 (this)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+
+      if (allocated(this%v10)) deallocate (this%v10)
+
+    end subroutine Destroy_meridional_wind10
+
     subroutine Destroy_rain (this)
 
       implicit none
@@ -214,6 +227,16 @@
       if (allocated(this%u3d)) deallocate (this%u3d)
 
     end subroutine Destroy_zonal_wind
+
+    subroutine Destroy_zonal_wind10 (this)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+
+      if (allocated(this%u10)) deallocate (this%u10)
+
+    end subroutine Destroy_zonal_wind10
 
     function Get_datetime_index (this, datetime) result (return_value)
 
@@ -282,6 +305,23 @@
       deallocate (var4d, var4d2)
 
     end subroutine Get_geopotential_levels
+
+    subroutine Get_meridional_wind10 (this, datetime)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+      type (datetime_t), intent (in) :: datetime
+
+      real, dimension(:, :, :), allocatable :: var3d
+      integer :: nt
+
+
+      nt = this%Get_datetime_index (datetime)
+      call Get_netcdf_var (trim (this%file_name), 'V10', var3d)
+      this%v10 = var3d(:, :, nt)
+
+    end subroutine Get_meridional_wind10
 
     subroutine Get_meridional_wind_3d (this, datetime)
 
@@ -438,6 +478,23 @@
 
     end subroutine Get_z0
 
+    subroutine Get_zonal_wind10 (this, datetime)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+      type (datetime_t), intent (in) :: datetime
+
+      real, dimension(:, :, :), allocatable :: var3d
+      integer :: nt
+
+
+      nt = this%Get_datetime_index (datetime)
+      call Get_netcdf_var (trim (this%file_name), 'U10', var3d)
+      this%u10 = var3d(:, :, nt)
+
+    end subroutine Get_zonal_wind10
+
     subroutine Get_zonal_wind_3d (this, datetime)
 
       implicit none
@@ -526,16 +583,18 @@
         ! latlon at corners
       call return_value%Get_latcloncs ()
 
+        ! Init domain dimensions
       return_value%ids = 1
-      return_value%jds = 1
       call Get_netcdf_dim (trim (file_name), 'west_east_stag', att_int32)
       return_value%ide = att_int32
+      return_value%jds = 1
       call Get_netcdf_dim (trim (file_name), 'south_north_stag', att_int32)
       return_value%jde = att_int32
+      return_value%kds = 1
+      call Get_netcdf_dim (trim (file_name), 'bottom_top_stag', att_int32)
+      return_value%kde = att_int32
 
-      return_value%kds = config_flags%kds
-      return_value%kde = config_flags%kde
-
+        ! Init rest of dimensions
       return_value%ims = return_value%ids
       return_value%ime = return_value%ide
       return_value%kms = return_value%kds
@@ -552,37 +611,26 @@
 
       if (DEBUG_LOCAL) call return_value%Print_domain()
 
-      allocate (return_value%phl_stag(return_value%ims:return_value%ime, &
-          return_value%kms:return_value%kme, return_value%jms:return_value%jme))
-      return_value%phl_stag = 0.0
+        ! Init some vars to default values
+      allocate (return_value%z0(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%z0 = DEFAULT_Z0
 
-      allocate (return_value%u3d_stag(return_value%ims:return_value%ime, &
-          return_value%kms:return_value%kme, return_value%jms:return_value%jme))
-      return_value%u3d_stag = 0.0
+      allocate (return_value%rain(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%rain = DEFAULT_RAIN
 
-      allocate (return_value%v3d_stag(return_value%ims:return_value%ime, &
-          return_value%kms:return_value%kme, return_value%jms:return_value%jme))
-      return_value%v3d_stag = 0.0
+      allocate (return_value%t2(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%t2 = DEFAULT_T2
 
-      allocate (return_value%z0_stag(return_value%ims:return_value%ime, return_value%jms:return_value%jme))
-      return_value%z0_stag = DEFAULT_Z0
+      allocate (return_value%q2(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%q2 = DEFAULT_Q2
 
-      allocate (return_value%rain_stag(return_value%ims:return_value%ime, return_value%jms:return_value%jme))
-      return_value%rain_stag = DEFAULT_RAIN
+      allocate (return_value%psfc(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%psfc = DEFAULT_PSFC
 
-      allocate (return_value%t2_stag(return_value%ims:return_value%ime, return_value%jms:return_value%jme))
-      return_value%t2_stag = DEFAULT_T2
-
-      allocate (return_value%q2_stag(return_value%ims:return_value%ime, return_value%jms:return_value%jme))
-      return_value%q2_stag = DEFAULT_Q2
-
-      allocate (return_value%psfc_stag(return_value%ims:return_value%ime, return_value%jms:return_value%jme))
-      return_value%psfc_stag = DEFAULT_PSFC
-
-      allocate (return_value%ua(return_value%ims:return_value%ime, return_value%jms:return_value%jme))
+      allocate (return_value%ua(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
       return_value%ua = 0.0
 
-      allocate (return_value%va(return_value%ims:return_value%ime, return_value%jms:return_value%jme))
+      allocate (return_value%va(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
       return_value%va = 0.0
 
       if (DEBUG_LOCAL) Call Print_message ('Leaving wrf_t constructor')
@@ -669,25 +717,25 @@
         ! Get WRF data
       select case (var_name)
         case ('t2')
-          var_wrf = this%t2_stag(this%ids:this%ide - 1, this%jds:this%jde - 1)
+          var_wrf = this%t2
 
         case ('q2')
-          var_wrf = this%q2_stag(this%ids:this%ide - 1, this%jds:this%jde - 1)
+          var_wrf = this%q2
 
         case ('psfc')
-          var_wrf = this%psfc_stag(this%ids:this%ide - 1, this%jds:this%jde - 1)
+          var_wrf = this%psfc
 
         case ('rain')
-          var_wrf = this%rain_stag(this%ids:this%ide - 1, this%jds:this%jde - 1)
+          var_wrf = this%rain
 
         case ('fz0')
-          var_wrf = this%z0_stag(this%ids:this%ide - 1, this%jds:this%jde - 1)
+          var_wrf = this%z0
 
         case ('uf')
-          var_wrf = this%ua(this%ids:this%ide - 1, this%jds:this%jde - 1)
+          var_wrf = this%ua
 
         case ('vf')
-          var_wrf = this%va(this%ids:this%ide - 1, this%jds:this%jde - 1)
+          var_wrf = this%va
 
         case default
           call Stop_simulation ('Unknown variable name to interpolate')
@@ -699,7 +747,6 @@
       ime = size (var_wrf, dim = 1)
       jms = 1
       jme = size (var_wrf, dim = 2)
-
       call Interp_horizontal (var_wrf, proj, ims, ime, jms, jme, ifms, ifme, jfms, jfme, &
           num_tiles, i_start, i_end, j_start, j_end, hinterp_opt, lats_out, lons_out, data_out)
 
@@ -1067,75 +1114,70 @@
 
     end subroutine Fire_tendency
 
-    subroutine Update_atm_state (this, datetime_now)
+    subroutine Update_atm_state (this, datetime_now, config_flags)
 
       implicit none
 
       class (wrf_t), intent(in out) :: this
       type (datetime_t), intent (in) :: datetime_now
+      type (namelist_t), intent (in) :: config_flags
 
-      integer :: i, j, k
+      integer :: iims, iime, jims, jime, kims, kime, ioms, iome, joms, jome, iops, iope, jops, jope
 
 
-          ! Update t2_stag
-        call this%Get_t2 (datetime_now)
-        this%t2_stag(this%ids:this%ide - 1, this%jds:this%jde - 1) = this%t2(:, :)
-        call this%Destroy_t2 ()
+      call this%Get_t2 (datetime_now)
+      call this%Get_q2 (datetime_now)
+      call this%Get_psfc (datetime_now)
+      call this%Get_rain (datetime_now)
+      call this%Get_z0 (datetime_now)
 
-          ! Update q2
-        call this%Get_q2 (datetime_now)
-        this%q2_stag(this%ids:this%ide - 1, this%jds:this%jde - 1) = this%q2(:, :)
-        call this%Destroy_q2 ()
+      select case (config_flags%wind_vinterp_opt)
+        case (VINTERP_WINDS_FROM_3D_WINDS)
+          call this%Get_u3d (datetime_now)
+          call this%Get_v3d (datetime_now)
+          call this%Get_phl (datetime_now)
 
-          ! Update psfc
-        call this%Get_psfc (datetime_now)
-        this%psfc_stag(this%ids:this%ide - 1, this%jds:this%jde - 1) = this%psfc(:, :)
-        call this%Destroy_psfc ()
+            ! Set input (i) and output (o) indices
+          iims = this%ids
+          iime = this%ide - 1
+          jims = this%ids
+          jime = this%ide - 1
+          kims = this%kds
+          kime = this%kde - 1
 
-          ! Update rain
-        call this%Get_rain (datetime_now)
-        this%rain_stag(this%ids:this%ide - 1, this%jds:this%jde - 1) = this%rain(:, :)
-        call this%Destroy_rain ()
+          ioms = this%ids
+          iome = this%ide - 1
+          joms = this%ids
+          jome = this%ide - 1
 
-          ! Update z0
-        call this%Get_z0 (datetime_now)
-        this%z0_stag(this%ids:this%ide - 1, this%jds:this%jde - 1) = this%z0(:, :)
-        call this%Destroy_z0 ()
+          iops = this%ids
+          iope = this%ide - 1
+          jops = this%ids
+          jope = this%ide - 1
+                                                   ! For compatibility with nuopc couplings
+                                                   ! pass z_at_w with vertical dim kde - 1 instead of kde
+          call Calc_fire_wind (this%u3d, this%v3d, this%phl(iims:iime, jims:jime, kims:kime) / G, this%z0, &
+              iims, iime, jims, jime, kims, kime, config_flags%fire_lsm_zcoupling, config_flags%fire_lsm_zcoupling_ref, &
+              config_flags%fire_wind_height, ioms, iome, joms, jome, iops, &
+              iope, jops, jope, this%ua, this%va)
 
-          ! Update U3D
-        call this%Get_u3d_stag (datetime_now)
-        do k = this%kds, this%kde - 1
-          do j = this%jds, this%jde - 1
-            do i = this%ids, this%ide
-              this%u3d_stag(i, k, j) = this%u3d(i, j, k)
-            end do
-          end do
-        end do
-        call this%Destroy_u3d ()
+          call this%Destroy_u3d ()
+          call this%Destroy_v3d ()
+          call this%Destroy_phl ()
+!          call this%Destroy_z0 ()
 
-          ! Update V3D
-        call this%Get_v3d_stag (datetime_now)
-        do k = this%kds, this%kde - 1
-          do j = this%jds, this%jde
-            do i = this%ids, this%ide - 1
-              this%v3d_stag(i, k, j) = this%v3d(i, j, k)
-            end do
-          end do
-        end do
-        call this%Destroy_v3d ()
+        case (VINTERP_WINDS_FROM_10M_WINDS)
+          call this%Get_u10 (datetime_now)
+          call this%Get_v10 (datetime_now)
 
-          ! Update geopotential heights
-        call this%Get_phl (datetime_now)
-        do k = this%kds, this%kde
-          do j = this%jds, this%jde - 1
-            do i = this%ids, this%ide - 1
-              this%phl_stag(i, k, j) = this%phl(i, j, k)
-            end do
-          end do
-        end do
-        call this%Destroy_phl ()
+          this%ua = this%u10
+          this%va = this%v10
+
+        case default
+          call Stop_simulation ('Error: wrong wind_vinterp_opt')
+
+      end select
 
     end subroutine Update_atm_state
 
   end module wrf_mod
-

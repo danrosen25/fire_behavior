@@ -81,7 +81,7 @@ then
   test=$(diff ./file1.dat ./file2.dat | wc -l)
     # Here we allow one difference since we are not expecting bit4bit results
   echo $test
-  if [ $test -eq 12 ]
+  if [ $test -eq 4 ]
   then
     echo '    Ignore this difference:'
     diff ./file1.dat ./file2.dat
@@ -105,7 +105,8 @@ then
   grep "$var" $file_wrf     | awk '{print $2, $7}' > ./file2.dat
 
   test=$(diff ./file1.dat ./file2.dat | wc -l)
-  if [ $test -eq 4 ]
+  echo $test
+  if [ $test -eq 8 ]
   then
     echo '    Ignore this difference:'
     diff ./file1.dat ./file2.dat
@@ -129,8 +130,9 @@ then
   grep "$var" $file_wrf     | awk '{print $2, $7}' > ./file2.dat
 
   test=$(diff ./file1.dat ./file2.dat | wc -l)
+  echo $test
     # Here we allow one difference since we are not expecting bit4bit results
-  if [ $test -eq  8 ]
+  if [ $test -eq  4 ]
   then
     echo '    Ignore this difference:'
     diff ./file1.dat ./file2.dat
@@ -156,7 +158,7 @@ then
   test=$(diff ./file1.dat ./file2.dat | wc -l)
     # Here we allow one difference since we are not expecting bit4bit results
   echo $test
-  if [ $test -eq 12 ]
+  if [ $test -eq 8 ]
   then
     echo '    Ignore this difference:'
     diff ./file1.dat ./file2.dat

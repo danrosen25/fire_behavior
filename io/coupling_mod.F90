@@ -1,15 +1,14 @@
   module coupling_mod
 
     use proj_lc_mod, only : proj_lc_t
-    use interp_mod, only : Interp_horizontal_nearest, Interp_horizontal_bilinear, HINTERP_NEAREST, HINTERP_BILINEAR
+    use interp_mod, only : Interp_horizontal_nearest, Interp_horizontal_bilinear, HINTERP_NEAREST, HINTERP_BILINEAR, Interp_profile
     use stderrout_mod, only : Stop_simulation
-
 
     implicit none
 
     private
 
-    public :: Interp_horizontal
+    public :: Interp_horizontal, Calc_fire_wind
 
   contains
 
@@ -61,5 +60,59 @@
       end select Hinterp
 
     end subroutine Interp_horizontal
+
+    subroutine Calc_fire_wind (u3d, v3d, z_at_w, z0, iims, iime, jims, jime, kims, kime, fire_lsm_zcoupling, &
+        fire_lsm_zcoupling_ref, fire_wind_height, ioms, iome, joms, jome, iops, iope, jops, jope, &
+        u_out, v_out, cap_winds)
+
+      implicit none
+
+      integer, intent (in) :: iims, iime, jims, jime, kims, kime, ioms, iome, joms, jome, iops, iope, jops, jope
+      real, intent (in) :: fire_wind_height, fire_lsm_zcoupling_ref
+      logical, intent (in) :: fire_lsm_zcoupling
+      real, dimension(iims:iime, jims:jime, kims:kime), intent (in) :: u3d, v3d, z_at_w
+      real, dimension(iims:iime, jims:jime), intent (in) :: z0
+      real, dimension(ioms:iome, joms:joms), intent (out) :: u_out, v_out
+      logical, intent (in), optional :: cap_winds
+
+      real :: wspd
+      integer :: i, j
+      logical :: cap_winds_flag
+
+
+!      print *, 'shape u3d = ', shape (u3d)
+!      print *, 'shape v3d = ', shape (v3d)
+!      print *, 'shape z_at_w = ', shape (z_at_w)
+!      print *, 'shape u_out = ', shape (u_out)
+!      print *, 'shape v_out = ', shape (v_out)
+!      print *, 'shape z0 = ', shape (z0)
+
+      if (present (cap_winds)) then
+        cap_winds_flag = cap_winds
+      else
+        cap_winds_flag = .false.
+      end if
+
+      do j = jops, jope
+        do i = iops, iope
+          call Interp_profile (fire_lsm_zcoupling, fire_lsm_zcoupling_ref, fire_wind_height, kims, kime, &
+              u3d(i, j, :), v3d(i, j, :), z_at_w(i, j, :), z0(i, j), u_out(i, j), v_out(i, j))
+        end do
+      end do
+
+        ! To avoid arithmatic error
+      if (cap_winds_flag) then
+        do j = jops, jope
+          do i = iops, iope
+            wspd = sqrt (u_out(i, j) ** 2 + v_out(i, j) ** 2)
+            if (wspd < 0.001) then
+              u_out(i, j) = sign (0.001, u_out(i, j))
+              v_out(i, j) = sign (0.001, v_out(i, j))
+            end if
+          end do
+        end do
+      end if
+
+    end subroutine Calc_fire_wind
 
   end module coupling_mod

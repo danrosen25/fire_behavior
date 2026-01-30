@@ -28,6 +28,8 @@ module wrf_nuopc
   real(ESMF_KIND_R8), pointer     :: ptr_psfc(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_rain(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_t2(:,:)
+  real(ESMF_KIND_R8), pointer     :: ptr_u10(:,:)
+  real(ESMF_KIND_R8), pointer     :: ptr_v10(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_u3d(:,:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_v3d(:,:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_phl(:,:,:)
@@ -109,11 +111,23 @@ module wrf_nuopc
 
     call Init_atm_state(state, config_flags)
 
-    allocate (state%q2(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%t2(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%z0(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%psfc(size(state%lats, dim=1), size(state%lats, dim=2)))
-    allocate (state%rain(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%q2)) &
+        allocate (state%q2(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%t2)) &
+        allocate (state%t2(size(state%lats, dim=1), size(state%lats, dim=2)))
+
+    if (.not. allocated (state%u10)) &
+        allocate (state%u10(size(state%lats, dim=1), size(state%lats, dim=2)))
+
+    if (.not. allocated (state%v10)) &
+        allocate (state%v10(size(state%lats, dim=1), size(state%lats, dim=2)))
+
+    if (.not. allocated (state%z0)) &
+        allocate (state%z0(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%psfc)) &
+        allocate (state%psfc(size(state%lats, dim=1), size(state%lats, dim=2)))
+    if (.not. allocated (state%rain)) &
+        allocate (state%rain(size(state%lats, dim=1), size(state%lats, dim=2)))
     allocate (state%u3d(size(state%lats, dim=1), size(state%lats, dim=2), state%kde - 1))
     allocate (state%v3d(size(state%lats, dim=1), size(state%lats, dim=2), state%kde - 1))
     allocate (state%phl(size(state%lats, dim=1), size(state%lats, dim=2), state%kde - 1))
@@ -476,7 +490,7 @@ module wrf_nuopc
       file=__FILE__)) &
       return  ! bail out
 
-!     ! exportable field on Grid: inst_pres_levels
+     ! exportable field on Grid: inst_pres_levels
 !     field = ESMF_FieldCreate(name="inst_pres_levels", grid=grid, &
 !       gridToFieldMap=(/1,2/), ungriddedLBound=(/1/), &
 !       ungriddedUBound=(/state%kde - 1/), &
@@ -594,6 +608,44 @@ module wrf_nuopc
       file=__FILE__)) &
       return  ! bail out
 
+    ! exportable field on Grid: inst_zonal_wind_height10m
+    field = ESMF_FieldCreate(name="inst_zonal_wind_height10m", grid=grid, &
+      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call NUOPC_Realize(exportState, field=field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    ! Get Field memory
+    call ESMF_FieldGet(field, localDe=0, farrayPtr=ptr_u10, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    ! exportable field on Grid: inst_merid_wind_height10m
+    field = ESMF_FieldCreate(name="inst_merid_wind_height10m", grid=grid, &
+      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call NUOPC_Realize(exportState, field=field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    ! Get Field memory
+    call ESMF_FieldGet(field, localDe=0, farrayPtr=ptr_v10, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
     ! exportable field on Grid: inst_pres_height_lowest_from_phys
     field = ESMF_FieldCreate(name="inst_pres_height_lowest_from_phys", grid=grid, &
       typekind=ESMF_TYPEKIND_R8, rc=rc)
@@ -622,32 +674,6 @@ module wrf_nuopc
 
     ! exportable field on Grid: inst_temp_height_lowest_from_phys
     field = ESMF_FieldCreate(name="inst_temp_height_lowest_from_phys", grid=grid, &
-      typekind=ESMF_TYPEKIND_R8, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call NUOPC_Realize(exportState, field=field, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-
-    ! exportable field on Grid: inst_zonal_wind_height10m
-    field = ESMF_FieldCreate(name="inst_zonal_wind_height10m", grid=grid, &
-      typekind=ESMF_TYPEKIND_R8, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call NUOPC_Realize(exportState, field=field, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-
-    ! exportable field on Grid: inst_merid_wind_height10m
-    field = ESMF_FieldCreate(name="inst_merid_wind_height10m", grid=grid, &
       typekind=ESMF_TYPEKIND_R8, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
@@ -809,6 +835,8 @@ module wrf_nuopc
     call state%Get_q2(datetime)
     call state%Get_psfc(datetime)
     call state%Get_rain(datetime)
+    call state%Get_u10(datetime)
+    call state%Get_v10(datetime)
     call state%Get_u3d(datetime)
     call state%Get_v3d(datetime)
     call state%Get_phl(datetime)
@@ -825,6 +853,10 @@ module wrf_nuopc
       state%rain(1:size(state%lats, dim=1),1:size(state%lats, dim=2))
     ptr_t2(clb(1):cub(1),clb(2):cub(2))= &
       state%t2(1:size(state%lats, dim=1),1:size(state%lats, dim=2))
+    ptr_u10(clb(1):cub(1),clb(2):cub(2))= &
+      state%u10(1:size(state%lats, dim=1),1:size(state%lats, dim=2))
+    ptr_v10(clb(1):cub(1),clb(2):cub(2))= &
+      state%v10(1:size(state%lats, dim=1),1:size(state%lats, dim=2))
 
     ptr_u3d(clb3(1):cub3(1),clb3(2):cub3(2),clb3(3):cub3(3))= &
       state%u3d(1:size(state%lats, dim=1),1:size(state%lats, dim=2), 1:state%kde - 1)

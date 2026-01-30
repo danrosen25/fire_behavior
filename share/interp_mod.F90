@@ -6,9 +6,10 @@
 
     private
 
-    integer, parameter :: HINTERP_NEAREST = 1, HINTERP_BILINEAR = 2
+    integer, parameter :: HINTERP_NEAREST = 1, HINTERP_BILINEAR = 2, VINTERP_WINDS_FROM_3D_WINDS = 0, VINTERP_WINDS_FROM_10M_WINDS = 1
 
-    public :: Interp_profile, Interp_horizontal_nearest, Interp_horizontal_bilinear, HINTERP_NEAREST, HINTERP_BILINEAR
+    public :: Interp_profile, Interp_horizontal_nearest, Interp_horizontal_bilinear, HINTERP_NEAREST, HINTERP_BILINEAR, &
+        VINTERP_WINDS_FROM_3D_WINDS, VINTERP_WINDS_FROM_10M_WINDS
 
   contains
 

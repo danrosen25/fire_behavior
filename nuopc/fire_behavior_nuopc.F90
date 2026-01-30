@@ -18,6 +18,8 @@ module fire_behavior_nuopc
   use advance_mod, only : Advance_state
   use constants_mod, only : G, XLV, CP, FVIRT, R_D
   use stderrout_mod, only : Stop_simulation
+  use coupling_mod, only : Calc_fire_wind
+  use interp_mod, only: VINTERP_WINDS_FROM_3D_WINDS, VINTERP_WINDS_FROM_10M_WINDS
 
   implicit none
 
@@ -770,13 +772,13 @@ module fire_behavior_nuopc
     real(ESMF_KIND_R8)          :: ts
     type(ESMF_State)            :: importState, exportState
     integer                     :: i, j
-    real                        :: wspd, q0, rho
+    real                        :: q0, rho
     character(len=160)          :: msgString
     real, dimension(:, :, :), allocatable :: atm_u3d, atm_v3d, atm_ph
     real, dimension(:, :), allocatable :: atm_lowest_t, atm_lowest_q, atm_lowest_pres
     real, dimension(:, :), allocatable :: grnhfx_kinematic, grnqfx_kinematic, smoke
     real :: dtratio
-
+    integer :: iims, iime, jims, jime, kims, kime, ioms, iome, joms, jome, iops, iope, jops, jope
 
     rc = ESMF_SUCCESS
 
@@ -841,26 +843,31 @@ module fire_behavior_nuopc
 #endif
 
     select case (config_flags%wind_vinterp_opt)
-      case (0)
-        do j = grid%jfps, grid%jfpe
-          do i = grid%ifps, grid%ifpe
-            call grid%Interpolate_profile (config_flags,  & ! for debug output, <= 0 no output
-                config_flags%fire_wind_height,           & ! interpolation height
-                grid%kfds, grid%kfde,                    & ! fire grid dimensions
-                atm_u3d(i,j,:),atm_v3d(i,j,:),           & ! atm grid arrays in
-                atm_ph(i,j,:),                           &
-                grid%uf(i,j),grid%vf(i,j),grid%fz0(i,j))
+      case (VINTERP_WINDS_FROM_3D_WINDS)
 
-            ! avoid arithmatic error
-            wspd = (grid%uf(i,j) ** 2. + grid%vf(i,j) ** 2.) ** .5
-            if (wspd < 0.001) then
-              grid%uf(i,j) = sign(0.001, grid%uf(i,j))
-              grid%vf(i,j) = sign(0.001, grid%vf(i,j))
-            endif
+      iims = grid%ifps
+      iime = grid%ifpe
+      jims = grid%jfps
+      jime = grid%jfpe
+      kims = grid%kfds
+      kime = grid%kfde - 1
 
-          enddo
-        enddo
-      case (1)
+      ioms = grid%ifms
+      iome = grid%ifme
+      joms = grid%jfms
+      jome = grid%jfme
+
+      iops = grid%ifps
+      iope = grid%ifpe
+      jops = grid%jfps
+      jope = grid%jfpe
+                                                           ! pass the z0 array without halos
+                                                           ! for compatibility with offline sims
+      call Calc_fire_wind (atm_u3d, atm_v3d, atm_ph / 9.81, grid%fz0(iims:iime, jims:jime), iims, iime, jims, jime, kims, kime, &
+          config_flags%fire_lsm_zcoupling,  config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, &
+          ioms, iome, joms, jome, iops, iope, jops, jope, grid%uf, grid%vf, cap_winds = .true.)
+
+      case (VINTERP_WINDS_FROM_10M_WINDS)
         do j = grid%jfps, grid%jfpe
           do i = grid%ifps, grid%ifpe
             grid%uf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_u10(i,j) 
@@ -869,6 +876,7 @@ module fire_behavior_nuopc
         end do
       case default
         call Stop_simulation ('Error: wrong wind_vinterp_opt')
+
     end select
 
     if (grid%datetime_now == grid%datetime_start) call grid%Save_state ()

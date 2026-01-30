@@ -8,6 +8,9 @@
 #
 purge_output=1 # 0) No, 1) yes
 plot=0 # 0) No, 1) yes
+update_nml=1 # 0) No, 1) yes
+#export OMP_NUM_THREADS=16
+#export OMP_PROC_BIND=true
 #
 #################################################
 #
@@ -25,7 +28,10 @@ file_exe=../install/bin/fire_behavior.exe
 file_output=test7_output.txt
 
 cp ./test7/wrf.nc .
-cp ./test7/namelist.fire .
+if [ $update_nml -eq 1 ]
+then
+  cp ./test7/namelist.fire .
+fi
 cp ./test7/geo_em.d01.nc .
 
 rm -f  ./$file_output
@@ -80,7 +86,7 @@ then
 
   test=$(diff ./file1.dat ./file2.dat | wc -l)
   echo $test
-  if [ $test -eq 10 ]
+  if [ $test -eq 8 ]
   then
     echo '    Ignore this difference:'
     diff ./file1.dat ./file2.dat
@@ -169,9 +175,12 @@ fi
 #
 
   # Purge
-rm -f ./namelist.fire.output ./file1.dat ./file2.dat ./wrf_input.dat ./geo_em.d01.nc ./namelist.fire
+rm -f ./namelist.fire.output ./file1.dat ./file2.dat ./wrf_input.dat
 if [ $purge_output -eq 1 ]
 then
+  rm -f ./wrf.nc
+  rm -f ./geo_em.d01.nc
+  rm -f ./namelist.fire
   rm -rf ./$file_output
   rm -f ./fire_output_2012-06-25_18:00:??.nc
 fi
@@ -203,7 +212,6 @@ then
 fi
 
 rm -f ./latlons.dat ./latlons_c.dat ./wrf_latlons_atm.dat ./wrf_latlons_fire.dat
-rm -f ./wrf.nc
 
   # OUTPUT_LATLON_CHECK is true
   # Check we are doing the projections right
