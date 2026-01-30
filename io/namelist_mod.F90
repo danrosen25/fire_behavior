@@ -670,22 +670,23 @@
           num_tiles
 
 
-      start_year = 0
-      start_month = 0
-      start_day = 0
-      start_hour = 0
-      start_minute = 0
-      start_second = 0
-      end_year = 0
-      end_month = 0
-      end_day = 0
-      end_hour = 0
-      end_minute = 0
-      end_second = 0
-      dt = 2.0
-      interval_output = 0
-      num_tiles = 1
-      tile_strategy = 0
+      start_year = this%start_year
+      start_month = this%start_month
+      start_day = this%start_day
+      start_hour = this%start_hour
+      start_minute = this%start_minute
+      start_second = this%start_second
+      end_year = this%end_year
+      end_month = this%end_month
+      end_day = this%end_day
+      end_hour = this%end_hour
+      end_minute = this%end_minute
+      end_second = this%end_second
+      dt = this%dt
+      interval_output = this%interval_output
+
+      num_tiles = this%num_tiles
+      tile_strategy = this%tile_strategy
 
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
