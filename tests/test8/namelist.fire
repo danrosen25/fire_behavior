@@ -13,6 +13,7 @@
  end_second = 10
  dt = 0.5
  interval_output = 1
+ num_tiles = 16,
 /
 
  &atm
@@ -37,5 +38,6 @@
  fire_upwinding = 9,               ! 0=none, 1=standard, 2=godunov, 3=eno, 4=sethian
  fmoist_run = .true.,   ! Run fuel moisture model
  fmoist_freq = 1,       ! Fuel moisture model updated every time step
+ wind_vinterp_opt = 0
 /
 

@@ -13,6 +13,7 @@
  end_second = 10
  dt = 0.5
  interval_output = 1
+ num_tiles = 16,
 /
 
  &atm
@@ -35,5 +36,6 @@
  fire_atm_feedback = 1.0,          ! real, multiplier for heat fluxes, 1.=normal, 0.=turn off two-way coupling 
  fire_viscosity = 0.4,             ! artificial viscosity in level set method (max 1, needed with fire_upwinding=0)
  fire_upwinding = 9,               ! 0=none, 1=standard, 2=godunov, 3=eno, 4=sethian
+ wind_vinterp_opt = 0,
 /
 

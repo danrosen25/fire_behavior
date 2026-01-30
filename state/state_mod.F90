@@ -780,17 +780,13 @@
       if (.not. allocated (this%lats) .or. .not. allocated (this%lons)) &
           call Stop_simulation ('Init lats/lons before calling hinterp atm variables')
 
-      if (this%datetime_now == this%datetime_start) call wrf%Interp_var2grid (this%lats, this%lons, &
-          this%ifms, this%ifme, this%jfms, this%jfme, config_flags%num_tiles, this%i_start, this%i_end, &
-          this%j_start, this%j_end, 'fz0', config_flags%hinterp_opt, this%fz0)
+      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
+          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
+          'ua', config_flags%hinterp_opt, this%uf)
 
       call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
           config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
-          'uf', config_flags%hinterp_opt, this%uf)
-
-      call wrf%Interp_var2grid (this%lats, this%lons, this%ifms, this%ifme, this%jfms, this%jfme, &
-          config_flags%num_tiles, this%i_start, this%i_end, this%j_start, this%j_end, &
-          'vf', config_flags%hinterp_opt, this%vf)
+          'va', config_flags%hinterp_opt, this%vf)
 
       if (config_flags%wind_vinterp_opt == 1) then
         call this%Apply_wafs ()
