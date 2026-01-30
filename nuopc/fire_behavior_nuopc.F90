@@ -19,6 +19,7 @@ module fire_behavior_nuopc
   use constants_mod, only : G, XLV, CP, FVIRT, R_D
   use stderrout_mod, only : Stop_simulation
   use coupling_mod, only : Calc_fire_wind
+  use interp_mod, only: VINTERP_WINDS_FROM_3D_WINDS, VINTERP_WINDS_FROM_10M_WINDS
 
   implicit none
 
@@ -842,7 +843,7 @@ module fire_behavior_nuopc
 #endif
 
     select case (config_flags%wind_vinterp_opt)
-      case (0)
+      case (VINTERP_WINDS_FROM_3D_WINDS)
 
       iims = grid%ifps
       iime = grid%ifpe
@@ -866,7 +867,7 @@ module fire_behavior_nuopc
           config_flags%fire_lsm_zcoupling,  config_flags%fire_lsm_zcoupling_ref, config_flags%fire_wind_height, &
           ioms, iome, joms, jome, iops, iope, jops, jope, grid%uf, grid%vf, cap_winds = .true.)
 
-      case (1)
+      case (VINTERP_WINDS_FROM_10M_WINDS)
         do j = grid%jfps, grid%jfpe
           do i = grid%ifps, grid%ifpe
             grid%uf(i,j) = grid%fuels%waf(int(grid%nfuel_cat(i,j))) * ptr_u10(i,j) 

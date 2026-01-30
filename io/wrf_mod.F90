@@ -6,7 +6,7 @@
     use netcdf_mod, only : Get_netcdf_var, Get_netcdf_att, Get_netcdf_dim, Is_netcdf_file_present
     use proj_lc_mod, only : proj_lc_t
     use stderrout_mod, only : Print_message, Stop_simulation
-    use interp_mod, only : Interp_profile
+    use interp_mod, only : Interp_profile, VINTERP_WINDS_FROM_3D_WINDS, VINTERP_WINDS_FROM_10M_WINDS
     use coupling_mod, only : Interp_horizontal, Calc_fire_wind
 
     implicit none
@@ -1132,7 +1132,7 @@
       call this%Get_z0 (datetime_now)
 
       select case (config_flags%wind_vinterp_opt)
-        case (0)
+        case (VINTERP_WINDS_FROM_3D_WINDS)
           call this%Get_u3d (datetime_now)
           call this%Get_v3d (datetime_now)
           call this%Get_phl (datetime_now)
@@ -1166,7 +1166,7 @@
           call this%Destroy_phl ()
 !          call this%Destroy_z0 ()
 
-        case (1)
+        case (VINTERP_WINDS_FROM_10M_WINDS)
           call this%Get_u10 (datetime_now)
           call this%Get_v10 (datetime_now)
 
