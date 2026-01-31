@@ -12,10 +12,7 @@
     public :: namelist_t, FIRE_MAX_IGNITIONS_IN_NAMELIST
 
     integer, parameter :: FIRE_MAX_IGNITIONS_IN_NAMELIST = 5
-      ! Default ideal block
-    real, parameter :: DX_DEFAULT = 100.0, U_DEFAULT = 5.0, V_DEFAULT = 0.0, LAT_DEFAULT = 40.3636, LON_DEFAULT = -4.4035, &
-       DZ_DX_DEFAULT = 0.0, ELEVATION_DEFAULT = 0.0
-    integer, parameter :: IDEAL_OPT_DEFAULT = 0, NX_DEFAULT = 100, FUEL_CAT_DEFAULT = 1
+
       ! Default options
     integer, parameter :: NO_FMC_MODEL = -1
 
@@ -76,7 +73,7 @@
       integer :: fmoist_freq = 0              ! frequency to run moisture model 0: use fmoist_dt, k>0: every k timesteps
       real :: fmoist_dt = 600.0               ! moisture model time step [s]
 
-      integer :: ideal_opt = IDEAL_OPT_DEFAULT  ! 0) real world, 1) ideal
+      integer :: ideal_opt = 0                ! 0) real world, 1) ideal
 
         ! Objects
       integer :: fuel_opt = 1 ! Fuel model
@@ -133,23 +130,23 @@
       real :: fire_ignition_radius5 = 0.0
 
         ! Ideal block
-      real :: dx = DX_DEFAULT
-      real :: dy = DX_DEFAULT
-      integer :: nx = NX_DEFAULT
-      integer :: ny = NX_DEFAULT
+      real :: dx = 100.0
+      real :: dy = 100.0
+      integer :: nx = 100
+      integer :: ny = 100
 
-      real :: zonal_wind = U_DEFAULT
-      real :: meridional_wind = V_DEFAULT
-      integer :: fuel_cat = FUEL_CAT_DEFAULT
-      real :: dz_dx = DZ_DX_DEFAULT
-      real :: dz_dy = DZ_DX_DEFAULT
-      real :: elevation = ELEVATION_DEFAULT
+      real :: zonal_wind = 5.0
+      real :: meridional_wind = 0.0
+      integer :: fuel_cat = 1
+      real :: dz_dx = 0.0
+      real :: dz_dy = 0.0
+      real :: elevation = 0.0
 
-      real :: cen_lat = LAT_DEFAULT
-      real :: cen_lon = LON_DEFAULT
-      real :: stand_lon = LON_DEFAULT
-      real :: true_lat_1 = LAT_DEFAULT
-      real :: true_lat_2 = LAT_DEFAULT
+      real :: cen_lat = 40.3636
+      real :: cen_lon = -4.4035
+      real :: stand_lon = -4.4035
+      real :: true_lat_1 = 40.363
+      real :: true_lat_2 = 40.363
 
         ! Atm block
       integer :: interval_atm = -1  ! Time step [s] of the atm (or frequency to read atm data if offline)
@@ -429,7 +426,7 @@
       real :: fuelmc_g_live = 0.30            ! Fuel moisture content ground (Live FMC). 30% Completely cured, treat as dead fuel
       real :: fuelmc_c = 1.00                 ! Fuel moisture content canopy
 
-      integer :: ideal_opt = IDEAL_OPT_DEFAULT
+      integer :: ideal_opt = 0
 
         ! Objects
       integer :: fuel_opt = 1 ! Fuel model
@@ -611,23 +608,23 @@
 
 
         ! Set default values
-      dx = DX_DEFAULT
-      dy = DX_DEFAULT
-      nx = NX_DEFAULT
-      ny = NX_DEFAULT
+      dx = this%dx
+      dy = this%dy
+      nx = this%nx
+      ny = this%ny
 
-      zonal_wind = U_DEFAULT
-      meridional_wind = V_DEFAULT
-      fuel_cat = FUEL_CAT_DEFAULT
-      dz_dx = DZ_DX_DEFAULT
-      dz_dy = DZ_DX_DEFAULT
-      elevation = ELEVATION_DEFAULT
+      zonal_wind = this%zonal_wind
+      meridional_wind = this%meridional_wind
+      fuel_cat = this%fuel_cat
+      dz_dx = this%dz_dx
+      dz_dy = this%dz_dy
+      elevation = this%elevation
 
-      cen_lat = LAT_DEFAULT
-      cen_lon = LON_DEFAULT
-      stand_lon = LON_DEFAULT
-      true_lat_1 = LAT_DEFAULT
-      true_lat_2 = LAT_DEFAULT
+      cen_lat = this%cen_lat
+      cen_lon = this%cen_lon
+      stand_lon = this%stand_lon
+      true_lat_1 = this%true_lat_1
+      true_lat_2 = this%true_lat_2
 
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
@@ -641,7 +638,6 @@
 
       this%dx = dx
       this%dy = dy
-
       this%nx = nx
       this%ny = ny
 
