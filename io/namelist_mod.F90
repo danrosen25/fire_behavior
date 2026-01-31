@@ -20,14 +20,27 @@
     integer, parameter :: NO_FMC_MODEL = -1
 
     type :: namelist_t
-      integer :: start_year = -1, start_month = -1, start_day = -1, start_hour = -1, start_minute = -1, start_second = -1, &
-          end_year = -1, end_month = -1, end_day = -1, end_hour = -1, end_minute = -1, end_second = -1, interval_output = -1, &
-          interval_atm = -1
-      real :: dt = 2.0
+        ! time block
+      integer :: start_year = -1              ! start year of the simulation
+      integer :: start_month = -1             ! Start month
+      integer :: start_day = -1               ! Start day
+      integer :: start_hour = -1              ! Start hour
+      integer :: start_minute = -1            ! Start minute
+      integer :: start_second = -1            ! Start sencond
+      integer :: end_year = -1                ! End year of the simulation
+      integer :: end_month = -1               ! End month
+      integer :: end_day = -1                 ! End day
+      integer :: end_hour = -1                ! End hour
+      integer :: end_minute = -1              ! End minute
+      integer :: end_second = -1              ! End second
 
-      integer :: num_tiles = 1
-      integer :: tile_strategy = 0
+      integer :: interval_output = -1         ! Frequency to save the output [s]
+      real :: dt = 2.0                        ! Time step of the fire model [s]
 
+      integer :: num_tiles = 1                ! Number of tiles in each patch
+      integer :: tile_strategy = 0            ! Strategy for the tile decomposition: 0) ...
+
+        ! fire block
       integer :: fire_print_msg = 0           ! "write fire statistics, 0 no writes, 1+ for more"  ""
       real :: fire_atm_feedback = 1.0         ! "the heat fluxes to the atmosphere are multiplied by this" "1"
       logical :: fire_is_real_perim = .false. ! .false. = point/line ignition, .true. = observed perimeter"
@@ -138,8 +151,9 @@
       real :: true_lat_1 = LAT_DEFAULT
       real :: true_lat_2 = LAT_DEFAULT
 
-        ! Atmosphere
-      integer :: kde = 1
+        ! Atm block
+      integer :: interval_atm = -1  ! Time step [s] of the atm (or frequency to read atm data if offline)
+      integer :: kde = 1            ! Number of atm vertical levels
     contains
       procedure, public :: Broadcast_nml => Broadcast_nml
       procedure, public :: Check_nml => Check_nml
@@ -147,7 +161,7 @@
       procedure, public :: Init_fire_block => Init_fire_block
       procedure, public :: Init_ideal_block => Init_ideal_block
       procedure, public :: Init_time_block => Init_time_block
-      procedure, public :: Init_atm_block => Init_atm_block_legacy
+      procedure, public :: Init_atm_block => Init_atm_block
     end type namelist_t
 
   contains
@@ -349,7 +363,7 @@
 
     end subroutine Check_nml
 
-    subroutine Init_atm_block_legacy (this, file_name)
+    subroutine Init_atm_block (this, file_name)
 
       implicit none
 
@@ -360,13 +374,11 @@
       integer :: unit_nml, io_stat
       character (len = :), allocatable :: msg
 
-
       namelist /atm/ kde, interval_atm
 
 
-      interval_atm = 0
-        ! The following vars are legacy vars
-      kde = 2
+      interval_atm = this%interval_atm
+      kde = this%kde
 
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
@@ -379,11 +391,9 @@
       close (unit_nml)
 
       this%interval_atm = interval_atm
-
-        ! Legacy vars
       this%kde = kde
 
-    end subroutine Init_atm_block_legacy
+    end subroutine Init_atm_block
 
     subroutine Init_fire_block (this, file_name)
 
