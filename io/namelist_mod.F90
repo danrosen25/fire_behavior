@@ -14,7 +14,10 @@
     integer, parameter :: FIRE_MAX_IGNITIONS_IN_NAMELIST = 5
 
       ! Default options
-    integer, parameter :: NO_FMC_MODEL = -1
+    integer, parameter :: DEFAULT_FUEL_OPT = 1
+    integer, parameter :: DEFAULT_ROS_OPT = 0
+    integer, parameter :: DEFAULT_FMC_OPT = -1
+    integer, parameter :: DEFAULT_EMIS_OPT = 0
 
     type :: namelist_t
         ! time block
@@ -64,7 +67,7 @@
       logical :: fire_lsm_zcoupling = .false. ! "flag to activate reference velocity at a different height from fire_wind_height"
       real :: fire_lsm_zcoupling_ref = 50.0   ! "reference height from wich u at fire_wind_hegiht is calculated using a logarithmic profile" "m"
 
-      real :: frac_fburnt_to_smoke = 0.02        ! "parts per unit of burned fuel becoming smoke" "g_smoke/kg_air"
+      real :: frac_fburnt_to_smoke = 0.02     ! "parts per unit of burned fuel becoming smoke" "g_smoke/kg_air"
       real :: fuelmc_g = 0.08                 ! Fuel moisture content ground (Dead FMC)
       real :: fuelmc_g_live = 0.30            ! Fuel moisture content ground (Live FMC). 30% Completely cured, treat as dead fuel
       real :: fuelmc_c = 1.00                 ! Fuel moisture content canopy
@@ -76,13 +79,13 @@
       integer :: ideal_opt = 0                ! 0) real world, 1) ideal
 
         ! Objects
-      integer :: fuel_opt = 1 ! Fuel model
-      integer :: ros_opt = 0  ! ROS parameterization
-      integer :: fmc_opt = NO_FMC_MODEL ! FMC model
-      integer :: emis_opt = 0 ! Object to be added. 0) WRF-Fire emiss, 1) PM2.5 as a function of FMC
+      integer :: fuel_opt = DEFAULT_FUEL_OPT  ! Fuel model
+      integer :: ros_opt = DEFAULT_ROS_OPT    ! ROS parameterization
+      integer :: fmc_opt = DEFAULT_FMC_OPT    ! FMC model
+      integer :: emis_opt = DEFAULT_EMIS_OPT  ! Object to be added. 0) WRF-Fire emiss, 1) PM2.5 as a function of FMC
 
         ! Ignitions
-      integer :: fire_num_ignitions = 0 ! "number of ignition lines"
+      integer :: fire_num_ignitions = 0       ! "number of ignition lines"
 
       real :: fire_ignition_start_lon1 = 0.0  ! "long coord of start of ignition line" "deg"
       real :: fire_ignition_start_lat1 = 0.0  ! "lat coord of start of ignition line" "deg"
@@ -130,27 +133,27 @@
       real :: fire_ignition_radius5 = 0.0
 
         ! Ideal block
-      real :: dx = 100.0
-      real :: dy = 100.0
-      integer :: nx = 100
-      integer :: ny = 100
+      real :: dx = 100.0                      ! grid spacing in x direction [m]
+      real :: dy = 100.0                      ! grid spacing in y direction [m]
+      integer :: nx = 100                     ! number of grid points in x direction
+      integer :: ny = 100                     ! number of grid points in y direction
 
-      real :: zonal_wind = 5.0
-      real :: meridional_wind = 0.0
-      integer :: fuel_cat = 1
-      real :: dz_dx = 0.0
-      real :: dz_dy = 0.0
-      real :: elevation = 0.0
+      real :: zonal_wind = 5.0                ! zonal wind [m s-1]
+      real :: meridional_wind = 0.0           ! meridional wind [m s-1]
+      integer :: fuel_cat = 1                 ! fuel type
+      real :: dz_dx = 0.0                     ! slope in x direction
+      real :: dz_dy = 0.0                     ! slope in y direction
+      real :: elevation = 0.0                 ! Elevation [m]
 
-      real :: cen_lat = 40.3636
-      real :: cen_lon = -4.4035
-      real :: stand_lon = -4.4035
-      real :: true_lat_1 = 40.363
-      real :: true_lat_2 = 40.363
+      real :: cen_lat = 40.3636               ! center latitude of the grid
+      real :: cen_lon = -4.4035               ! center longitude of the grid
+      real :: stand_lon = -4.4035             ! standard longitude
+      real :: true_lat_1 = 40.363             ! true latitude 1
+      real :: true_lat_2 = 40.363             ! true latitude 2
 
         ! Atm block
-      integer :: interval_atm = -1  ! Time step [s] of the atm (or frequency to read atm data if offline)
-      integer :: kde = 1            ! Number of atm vertical levels
+      integer :: interval_atm = -1            ! Time step [s] of the atm (or frequency to read atm data if offline)
+      integer :: kde = 1                      ! Number of atm vertical levels
     contains
       procedure, public :: Broadcast_nml => Broadcast_nml
       procedure, public :: Check_nml => Check_nml
