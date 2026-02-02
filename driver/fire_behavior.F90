@@ -7,14 +7,14 @@
     use namelist_mod, only : namelist_t
     use initialize_mod, only : Init_fire_state, Init_atm_state
     use advance_mod, only : Advance_state
-    use wrfdata_mod, only : wrf_t
+    use wrfdata_mod, only : wrfdata_t
     use, intrinsic :: iso_fortran_env, only : ERROR_UNIT, OUTPUT_UNIT
 
     implicit none
 
     integer :: ierr, rank
     type (state_fire_t) :: grid
-    type (wrf_t) :: atm_state
+    type (wrfdata_t) :: atm_state
     type (namelist_t) :: config_flags
     logical, parameter :: DEBUG_LOCAL = .false.
 

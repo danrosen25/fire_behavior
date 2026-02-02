@@ -15,7 +15,7 @@
     use ros_mod, only : ros_t
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
-    use wrfdata_mod, only : wrf_t, G, RERADIUS
+    use wrfdata_mod, only : wrfdata_t, G, RERADIUS
     use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Distribute_var2d
 
     implicit none
@@ -257,7 +257,7 @@
 
       class (state_fire_t), intent(in out) :: this
       type (namelist_t), intent (in) :: config_flags
-      type (wrf_t), intent (in out) :: wrf
+      type (wrfdata_t), intent (in out) :: wrf
 
       logical, parameter :: DEBUG_LOCAL = .false.
 
@@ -771,7 +771,7 @@
       implicit none
 
       class (state_fire_t), intent(in out) :: this
-      type (wrf_t), intent(in out) :: wrf
+      type (wrfdata_t), intent(in out) :: wrf
       type (namelist_t), intent (in) :: config_flags
 
       integer :: i, j

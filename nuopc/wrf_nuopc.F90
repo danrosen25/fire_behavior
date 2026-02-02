@@ -11,7 +11,7 @@ module wrf_nuopc
   use NUOPC
   use NUOPC_Model, &
     modelSS    => SetServices
-  use wrfdata_mod, only : wrf_t
+  use wrfdata_mod, only : wrfdata_t
   use namelist_mod, only : namelist_t
   use datetime_mod, only : datetime_t
   use initialize_mod, only: Init_atm_state
@@ -22,7 +22,7 @@ module wrf_nuopc
 
   public SetVM, SetServices
 
-  type (wrf_t) :: state
+  type (wrfdata_t) :: state
   real(ESMF_KIND_R8), pointer     :: ptr_z0(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_q2(:,:)
   real(ESMF_KIND_R8), pointer     :: ptr_psfc(:,:)

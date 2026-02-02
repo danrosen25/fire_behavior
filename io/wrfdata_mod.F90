@@ -12,12 +12,12 @@
 
     private
 
-    public :: wrf_t, G, RERADIUS
+    public :: wrfdata_t, G, RERADIUS
 
     real, parameter :: G = 9.81                   ! acceleration due to gravity [m s-2]
     real, parameter :: RERADIUS = 1.0 / 6370.0e03 ! reciprocal of earth radius (m^-1)
 
-    type :: wrf_t
+    type :: wrfdata_t
       character (len = 300) :: file_name
       real, dimension(:, :, :), allocatable :: u3d, v3d, phl
       real, dimension(:, :), allocatable :: lats, lons, lats_c, lons_c, t2, q2, z0, psfc, rain, ua, va, u10, v10
@@ -53,11 +53,11 @@
       procedure, public :: Interp_var2grid => Interp_var2grid
       procedure, public :: Print_domain => Print_domain
       procedure, public :: Update_atm_state => Update_atm_state
-    end type wrf_t
+    end type wrfdata_t
 
-    interface wrf_t
-      module procedure Wrf_t_const
-    end interface wrf_t
+    interface wrfdata_t
+      module procedure Wrfdata_t_const
+    end interface wrfdata_t
 
   contains
 
@@ -65,7 +65,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%phl)) deallocate (this%phl)
 
@@ -75,7 +75,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%v3d)) deallocate (this%v3d)
 
@@ -85,7 +85,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%v10)) deallocate (this%v10)
 
@@ -95,7 +95,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%rain)) deallocate (this%rain)
 
@@ -105,7 +105,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%psfc)) deallocate (this%psfc)
 
@@ -115,7 +115,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%q2)) deallocate (this%q2)
 
@@ -125,7 +125,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%t2)) deallocate (this%t2)
 
@@ -135,7 +135,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%z0)) deallocate (this%z0)
 
@@ -145,7 +145,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%u3d)) deallocate (this%u3d)
 
@@ -155,7 +155,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       if (allocated(this%u10)) deallocate (this%u10)
 
@@ -167,7 +167,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in) :: this
+      class (wrfdata_t), intent (in) :: this
       type (datetime_t), intent (in) :: datetime
       integer :: return_value
 
@@ -194,7 +194,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       type (proj_lc_t) :: proj
       logical, parameter :: OUTPUT_LATLON_CHECK = .false.
@@ -250,7 +250,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
 
       real, dimension(:, :, :), allocatable :: var3d
 
@@ -269,7 +269,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :, :), allocatable :: var4d, var4d2
@@ -289,7 +289,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :), allocatable :: var3d
@@ -306,7 +306,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :, :), allocatable :: var4d
@@ -325,7 +325,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :, :), allocatable :: var4d
@@ -345,7 +345,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in) :: this
+      class (wrfdata_t), intent (in) :: this
       logical, intent (in), optional :: stagger
       type (proj_lc_t) :: return_value
 
@@ -374,7 +374,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :), allocatable :: var3d
@@ -391,7 +391,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :), allocatable :: var3d, var3d2
@@ -410,7 +410,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :), allocatable :: var3d
@@ -427,7 +427,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :), allocatable :: var3d
@@ -444,7 +444,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :), allocatable :: var3d
@@ -461,7 +461,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :), allocatable :: var3d
@@ -478,7 +478,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :, :), allocatable :: var4d
@@ -497,7 +497,7 @@
 
       implicit none
 
-      class (wrf_t), intent (in out) :: this
+      class (wrfdata_t), intent (in out) :: this
       type (datetime_t), intent (in) :: datetime
 
       real, dimension(:, :, :, :), allocatable :: var4d
@@ -516,7 +516,7 @@
 
       implicit none
 
-      class (wrf_t), intent(in) :: this
+      class (wrfdata_t), intent(in) :: this
       integer, intent (in) :: ifms, ifme, jfms, jfme, num_tiles
       integer, dimension (num_tiles), intent (in) :: i_start, i_end, j_start, j_end
       real, dimension(ifms:ifme, jfms:jfme), intent(in) :: lats_out, lons_out
@@ -573,7 +573,7 @@
 
       implicit none
 
-      class (wrf_t), intent(in out) :: this
+      class (wrfdata_t), intent(in out) :: this
 
 
       write (OUTPUT_UNIT, *) ''
@@ -595,7 +595,7 @@
 
       implicit none
 
-      class (wrf_t), intent(in out) :: this
+      class (wrfdata_t), intent(in out) :: this
       type (datetime_t), intent (in) :: datetime_now
       type (namelist_t), intent (in) :: config_flags
 
@@ -657,7 +657,7 @@
 
     end subroutine Update_atm_state
 
-    function Wrf_t_const (file_name, config_flags) result (return_value)
+    function Wrfdata_t_const (file_name, config_flags) result (return_value)
 
       use, intrinsic :: iso_fortran_env, only : REAL32, INT32
 
@@ -665,7 +665,7 @@
 
       character (len = *), intent (in) :: file_name
       type (namelist_t), intent (in) :: config_flags
-      type (wrf_t) :: return_value
+      type (wrfdata_t) :: return_value
 
       logical, parameter :: DEBUG_LOCAL = .false.
       real, parameter :: DEFAULT_Z0 = 0.1, DEFAULT_ZSF = 0.0, DEFAULT_DZDXF = 0.0, DEFAULT_DZDYF = 0.0, &
@@ -675,7 +675,7 @@
       integer (kind = INT32) :: att_int32
 
 
-      if (DEBUG_LOCAL) Call Print_message ('Entering wrf_t constructor')
+      if (DEBUG_LOCAL) Call Print_message ('Entering wrfdata_t constructor')
 
       return_value%file_name = trim (file_name)
       call Is_netcdf_file_present (trim (file_name))
@@ -758,8 +758,8 @@
       allocate (return_value%va(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
       return_value%va = 0.0
 
-      if (DEBUG_LOCAL) Call Print_message ('Leaving wrf_t constructor')
+      if (DEBUG_LOCAL) Call Print_message ('Leaving wrfdata_t constructor')
 
-    end function Wrf_t_const
+    end function Wrfdata_t_const
 
   end module wrfdata_mod
