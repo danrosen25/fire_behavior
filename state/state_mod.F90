@@ -15,7 +15,7 @@
     use ros_mod, only : ros_t
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
-    use wrf_mod, only : wrf_t, G, RERADIUS
+    use wrfdata_mod, only : wrf_t, G, RERADIUS
     use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Distribute_var2d
 
     implicit none

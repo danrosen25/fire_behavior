@@ -7,7 +7,7 @@
     use namelist_mod, only : namelist_t
     use initialize_mod, only : Init_fire_state, Init_atm_state
     use advance_mod, only : Advance_state
-    use wrf_mod, only : wrf_t
+    use wrfdata_mod, only : wrf_t
     use, intrinsic :: iso_fortran_env, only : ERROR_UNIT, OUTPUT_UNIT
 
     implicit none

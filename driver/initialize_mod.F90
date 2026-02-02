@@ -3,7 +3,7 @@
     use state_mod, only : state_fire_t
     use namelist_mod, only : namelist_t
     use geogrid_mod, only : geogrid_t
-    use wrf_mod, only : wrf_t
+    use wrfdata_mod, only : wrf_t
     use fire_driver_mod, only : Init_fire_components
     use stderrout_mod, only: Print_message
 

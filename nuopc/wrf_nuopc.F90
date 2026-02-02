@@ -11,7 +11,7 @@ module wrf_nuopc
   use NUOPC
   use NUOPC_Model, &
     modelSS    => SetServices
-  use wrf_mod, only : wrf_t
+  use wrfdata_mod, only : wrf_t
   use namelist_mod, only : namelist_t
   use datetime_mod, only : datetime_t
   use initialize_mod, only: Init_atm_state

@@ -77,6 +77,7 @@ list(APPEND _io_files io/namelist_mod.F90
                       io/coupling_mod.F90
                       io/geogrid_mod.F90
                       io/wrf_mod.F90
+                      io/wrfdata_mod.F90
 		      io/netcdf_mod.F90
                       io/stderrout_mod.F90)
 
