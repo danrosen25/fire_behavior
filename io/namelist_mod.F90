@@ -3,6 +3,12 @@
 #ifdef DM_PARALLEL
     use mpi_f08
 #endif
+      ! Get access to default options
+    use interp_mod, only : HINTERP_BILINEAR, VINTERP_WINDS_FROM_10M_WINDS
+    use fuel_mod, only : FUEL_ANDERSON
+    use ros_mod, only : ROS_WRFFIRE
+    use fmc_mod, only : FMC_WRFFIRE
+    use emis_mod, only : EMIS_WRFFIRE
     use stderrout_mod, only : Stop_simulation, Print_message
 
     implicit none
@@ -12,12 +18,6 @@
     public :: namelist_t, FIRE_MAX_IGNITIONS_IN_NAMELIST
 
     integer, parameter :: FIRE_MAX_IGNITIONS_IN_NAMELIST = 5
-
-      ! Default options
-    integer, parameter :: DEFAULT_FUEL_OPT = 1
-    integer, parameter :: DEFAULT_ROS_OPT = 0
-    integer, parameter :: DEFAULT_FMC_OPT = -1
-    integer, parameter :: DEFAULT_EMIS_OPT = 0
 
     type :: namelist_t
         ! time block
@@ -45,7 +45,7 @@
       real :: fire_atm_feedback = 1.0         ! "the heat fluxes to the atmosphere are multiplied by this" "1"
       logical :: fire_is_real_perim = .false. ! .false. = point/line ignition, .true. = observed perimeter"
 
-      integer :: fire_upwinding = 9           ! "upwind normal spread: 1=standard, 2=godunov, 3=eno, 4=sethian, 5=2nd-order,
+      integer :: fire_upwinding = 9           ! "Numerical method for normal spread: 1=standard, 2=godunov, 3=eno, 4=sethian, 5=2nd-order,
                                               ! 6=WENO3, 7=WENO5, 8=hybrid WENO3/ENO1, 9=hybrid WENO5/ENO1" "1"
       real :: fire_viscosity = 0.4            ! artificial viscosity in level set method farm from near-front region
       real :: fire_viscosity_bg = 0.4         ! artificial viscosity in level set method the near-front region. Should be lower/equal to fire_viscosity
@@ -62,8 +62,8 @@
       integer :: fast_dist_reinit_freq = 600  ! Number of time steps to perform a reinit with fast distance reinit method
 
       real :: fire_wind_height = 6.096        ! "height of uah,vah wind in fire spread formula" "m"
-      integer :: wind_vinterp_opt = 1         ! "mid-flame height wind interpolation option: 0) Interp to specified height, 1) Use WAFs"
-      integer :: hinterp_opt = 2              ! "Horizontal interpolation from atm to fire (offline option): 1) ngp, 2)bi-linear"
+      integer :: wind_vinterp_opt = VINTERP_WINDS_FROM_10M_WINDS ! "mid-flame height wind interpolation option: 0) Interp to specified height, 1) Use WAFs"
+      integer :: hinterp_opt = HINTERP_BILINEAR ! "Horizontal interpolation from atm to fire (offline option): 1) nearest neighbour, 2) bi-linear"
       logical :: fire_lsm_zcoupling = .false. ! "flag to activate reference velocity at a different height from fire_wind_height"
       real :: fire_lsm_zcoupling_ref = 50.0   ! "reference height from wich u at fire_wind_hegiht is calculated using a logarithmic profile" "m"
 
@@ -79,10 +79,10 @@
       integer :: ideal_opt = 0                ! 0) real world, 1) ideal
 
         ! Objects
-      integer :: fuel_opt = DEFAULT_FUEL_OPT  ! Fuel model
-      integer :: ros_opt = DEFAULT_ROS_OPT    ! ROS parameterization
-      integer :: fmc_opt = DEFAULT_FMC_OPT    ! FMC model
-      integer :: emis_opt = DEFAULT_EMIS_OPT  ! Object to be added. 0) WRF-Fire emiss, 1) PM2.5 as a function of FMC
+      integer :: fuel_opt = FUEL_ANDERSON     !  1) Anderson 13 
+      integer :: ros_opt = ROS_WRFFIRE        !  0) WRF-Fire ROS
+      integer :: fmc_opt = FMC_WRFFIRE        ! -1) WRF-Fire FMC
+      integer :: emis_opt = EMIS_WRFFIRE      !  0) WRF-Fire emiss, 1) PM2.5 as a function of FMC. Objects to be added
 
         ! Ignitions
       integer :: fire_num_ignitions = 0       ! "number of ignition lines"
@@ -450,6 +450,7 @@
       character (len = :), allocatable :: msg
 
 
+        ! Set default values
       fire_print_msg = this%fire_print_msg
       fire_atm_feedback = this%fire_atm_feedback
       fire_upwinding = this%fire_upwinding
@@ -531,6 +532,7 @@
       fire_ignition_end_time5 = this%fire_ignition_end_time5
       fire_ignition_radius5 = this%fire_ignition_radius5
 
+        ! Read namelist
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
         msg = 'Problems opening namelist file ' // trim (file_name)
@@ -539,8 +541,10 @@
 
       read (unit_nml, nml = fire)
       if (io_stat /= 0) call Stop_simulation ('Problems reading namelist fire block')
+
       close (unit_nml)
 
+        ! Assign namelist values
       this%fire_print_msg = fire_print_msg
       this%fire_atm_feedback = fire_atm_feedback
       this%fire_upwinding = fire_upwinding
@@ -661,6 +665,7 @@
       true_lat_1 = this%true_lat_1
       true_lat_2 = this%true_lat_2
 
+        ! Read namelist
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
         msg = 'Problems opening namelist file ' // trim (file_name)
@@ -669,8 +674,10 @@
 
       read (unit_nml, nml = ideal, iostat = io_stat)
       if (io_stat /= 0) call Stop_simulation ('Problems reading namelist ideal block')
+
       close (unit_nml)
 
+        ! Assign namelist values
       this%dx = dx
       this%dy = dy
       this%nx = nx
@@ -711,6 +718,7 @@
           num_tiles
 
 
+        ! Set default values
       start_year = this%start_year
       start_month = this%start_month
       start_day = this%start_day
@@ -729,6 +737,7 @@
       num_tiles = this%num_tiles
       tile_strategy = this%tile_strategy
 
+        ! Read namelist
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
         msg = 'Problems opening namelist file ' // trim (file_name)
@@ -737,8 +746,10 @@
 
       read (unit_nml, nml = time, iostat = io_stat)
       if (io_stat /= 0) call Stop_simulation ('Problems reading namelist time block')
+
       close (unit_nml)
 
+        ! Set namelist values
       this%start_year = start_year
       this%start_month = start_month
       this%start_day = start_day
