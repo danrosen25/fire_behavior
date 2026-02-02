@@ -1,12 +1,11 @@
   module wrfdata_mod
 
-    use constants_mod, only : CP, XLV
     use datetime_mod, only : datetime_t
     use namelist_mod, only : namelist_t
     use netcdf_mod, only : Get_netcdf_var, Get_netcdf_att, Get_netcdf_dim, Is_netcdf_file_present
     use proj_lc_mod, only : proj_lc_t
     use stderrout_mod, only : Print_message, Stop_simulation
-    use interp_mod, only : Interp_profile, VINTERP_WINDS_FROM_3D_WINDS, VINTERP_WINDS_FROM_10M_WINDS
+    use interp_mod, only : VINTERP_WINDS_FROM_3D_WINDS, VINTERP_WINDS_FROM_10M_WINDS
     use coupling_mod, only : Interp_horizontal, Calc_fire_wind
 
     implicit none
@@ -190,6 +189,62 @@
       stop
 
     end function Get_datetime_index
+
+    subroutine Get_latcloncs (this)
+
+      implicit none
+
+      class (wrf_t), intent (in out) :: this
+
+      type (proj_lc_t) :: proj
+      logical, parameter :: OUTPUT_LATLON_CHECK = .false.
+      integer :: nx, ny, i, j
+
+
+      nx = size (this%lats, dim = 1) + 1
+      ny = size (this%lats, dim = 2) + 1
+
+      allocate (this%lats_c(nx, ny))
+      allocate (this%lons_c(nx, ny))
+
+      proj = this%Get_projection (stagger = .true.)
+
+      do j = 1, ny
+        do i = 1, nx
+          call proj%Calc_latlon (i = real (i), j = real (j), lat = this%lats_c(i, j), lon = this%lons_c(i, j))
+        end do
+      end do
+
+      if (OUTPUT_LATLON_CHECK) call Write_latlon_check ()
+
+    contains
+
+      subroutine Write_latlon_check ()
+
+        implicit none
+
+        integer :: i, j, unit1, unit2
+
+
+        open (newunit = unit1, file = "latlons_wrf_mass.dat")
+        do j = 1,  size (this%lats, dim = 2)
+          do i = 1,  size (this%lats, dim = 1)
+            write (unit1, *) i, j, this%lats(i, j), this%lons(i, j)
+          end do
+        end do
+        close (unit1)
+
+        open (newunit = unit2, file = "latlons_wrf_corners_estimated.dat")
+        do j = 1,  size (this%lats, dim = 2) + 1
+          do i = 1,  size (this%lats, dim = 1) + 1
+            write (unit2, *) i, j, this%lats_c(i, j), this%lons_c(i, j)
+          end do
+        end do
+        close (unit2)
+
+      end subroutine Write_latlon_check
+
+    end subroutine Get_latcloncs
 
     subroutine Get_latlons (this)
 
@@ -456,167 +511,6 @@
 
     end subroutine Get_zonal_wind_stag_3d
 
-    function Wrf_t_const (file_name, config_flags) result (return_value)
-
-      use, intrinsic :: iso_fortran_env, only : REAL32, INT32
-
-      implicit none
-
-      character (len = *), intent (in) :: file_name
-      type (namelist_t), intent (in) :: config_flags
-      type (wrf_t) :: return_value
-
-      logical, parameter :: DEBUG_LOCAL = .false.
-      real, parameter :: DEFAULT_Z0 = 0.1, DEFAULT_ZSF = 0.0, DEFAULT_DZDXF = 0.0, DEFAULT_DZDYF = 0.0, &
-          DEFAULT_T2 = 123.4, DEFAULT_Q2 = 0.0, DEFAULT_PSFC = 0.0, DEFAULT_RAIN = 0.0
-
-      real (kind = REAL32) :: att_real32
-      integer (kind = INT32) :: att_int32
-
-
-      if (DEBUG_LOCAL) Call Print_message ('Entering wrf_t constructor')
-
-      return_value%file_name = trim (file_name)
-      call Is_netcdf_file_present (trim (file_name))
-
-        ! Init projection
-      call Get_netcdf_att (trim (return_value%file_name), 'global', 'CEN_LAT', att_real32)
-      return_value%cen_lat = att_real32
-
-      call Get_netcdf_att (trim (return_value%file_name), 'global', 'CEN_LON', att_real32)
-      return_value%cen_lon = att_real32
-
-      call Get_netcdf_att (trim (return_value%file_name), 'global', 'TRUELAT1', att_real32)
-      return_value%truelat1 = att_real32
-
-      call Get_netcdf_att (trim (return_value%file_name), 'global', 'TRUELAT2', att_real32)
-      return_value%truelat2 = att_real32
-
-      call Get_netcdf_att (trim (return_value%file_name), 'global', 'STAND_LON', att_real32)
-      return_value%stand_lon = att_real32
-
-      call Get_netcdf_att (trim (return_value%file_name), 'global', 'DX', att_real32)
-      return_value%dx = att_real32
-
-      call Get_netcdf_att (trim (return_value%file_name), 'global', 'DY', att_real32)
-      return_value%dy = att_real32
-
-        ! latlon at mass points
-      call return_value%Get_latlons ()
-
-        ! latlon at corners
-      call return_value%Get_latcloncs ()
-
-        ! Init domain dimensions
-      return_value%ids = 1
-      call Get_netcdf_dim (trim (file_name), 'west_east_stag', att_int32)
-      return_value%ide = att_int32
-      return_value%jds = 1
-      call Get_netcdf_dim (trim (file_name), 'south_north_stag', att_int32)
-      return_value%jde = att_int32
-      return_value%kds = 1
-      call Get_netcdf_dim (trim (file_name), 'bottom_top_stag', att_int32)
-      return_value%kde = att_int32
-
-        ! Init rest of dimensions
-      return_value%ims = return_value%ids
-      return_value%ime = return_value%ide
-      return_value%kms = return_value%kds
-      return_value%kme = return_value%kde
-      return_value%jms = return_value%jds
-      return_value%jme = return_value%jde
-
-      return_value%its = return_value%ids
-      return_value%ite = return_value%ide
-      return_value%kts = return_value%kds
-      return_value%kte = return_value%kde
-      return_value%jts = return_value%jds
-      return_value%jte = return_value%jde
-
-      if (DEBUG_LOCAL) call return_value%Print_domain()
-
-        ! Init some vars to default values
-      allocate (return_value%z0(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
-      return_value%z0 = DEFAULT_Z0
-
-      allocate (return_value%rain(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
-      return_value%rain = DEFAULT_RAIN
-
-      allocate (return_value%t2(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
-      return_value%t2 = DEFAULT_T2
-
-      allocate (return_value%q2(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
-      return_value%q2 = DEFAULT_Q2
-
-      allocate (return_value%psfc(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
-      return_value%psfc = DEFAULT_PSFC
-
-      allocate (return_value%ua(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
-      return_value%ua = 0.0
-
-      allocate (return_value%va(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
-      return_value%va = 0.0
-
-      if (DEBUG_LOCAL) Call Print_message ('Leaving wrf_t constructor')
-
-    end function Wrf_t_const
-
-    subroutine Get_latcloncs (this)
-
-      implicit none
-
-      class (wrf_t), intent (in out) :: this
-
-      type (proj_lc_t) :: proj
-      logical, parameter :: OUTPUT_LATLON_CHECK = .false.
-      integer :: nx, ny, i, j
-
-
-      nx = size (this%lats, dim = 1) + 1
-      ny = size (this%lats, dim = 2) + 1
-
-      allocate (this%lats_c(nx, ny))
-      allocate (this%lons_c(nx, ny))
-
-      proj = this%Get_projection (stagger = .true.)
-
-      do j = 1, ny
-        do i = 1, nx
-          call proj%Calc_latlon (i = real (i), j = real (j), lat = this%lats_c(i, j), lon = this%lons_c(i, j))
-        end do
-      end do
-
-      if (OUTPUT_LATLON_CHECK) call Write_latlon_check ()
-
-    contains
-
-      subroutine Write_latlon_check ()
-
-        implicit none
-
-        integer :: i, j, unit1, unit2
-
-
-        open (newunit = unit1, file = "latlons_wrf_mass.dat")
-        do j = 1,  size (this%lats, dim = 2)
-          do i = 1,  size (this%lats, dim = 1)
-            write (unit1, *) i, j, this%lats(i, j), this%lons(i, j)
-          end do
-        end do
-        close (unit1)
-
-        open (newunit = unit2, file = "latlons_wrf_corners_estimated.dat")
-        do j = 1,  size (this%lats, dim = 2) + 1
-          do i = 1,  size (this%lats, dim = 1) + 1
-            write (unit2, *) i, j, this%lats_c(i, j), this%lons_c(i, j)
-          end do
-        end do
-        close (unit2)
-
-      end subroutine Write_latlon_check
-
-    end subroutine Get_latcloncs
-
     subroutine Interp_var2grid (this, lats_out, lons_out, ifms, ifme, jfms, jfme, &
         num_tiles, i_start, i_end, j_start, j_end, var_name, hinterp_opt, data_out)
 
@@ -762,5 +656,110 @@
       end select
 
     end subroutine Update_atm_state
+
+    function Wrf_t_const (file_name, config_flags) result (return_value)
+
+      use, intrinsic :: iso_fortran_env, only : REAL32, INT32
+
+      implicit none
+
+      character (len = *), intent (in) :: file_name
+      type (namelist_t), intent (in) :: config_flags
+      type (wrf_t) :: return_value
+
+      logical, parameter :: DEBUG_LOCAL = .false.
+      real, parameter :: DEFAULT_Z0 = 0.1, DEFAULT_ZSF = 0.0, DEFAULT_DZDXF = 0.0, DEFAULT_DZDYF = 0.0, &
+          DEFAULT_T2 = 123.4, DEFAULT_Q2 = 0.0, DEFAULT_PSFC = 0.0, DEFAULT_RAIN = 0.0
+
+      real (kind = REAL32) :: att_real32
+      integer (kind = INT32) :: att_int32
+
+
+      if (DEBUG_LOCAL) Call Print_message ('Entering wrf_t constructor')
+
+      return_value%file_name = trim (file_name)
+      call Is_netcdf_file_present (trim (file_name))
+
+        ! Init projection
+      call Get_netcdf_att (trim (return_value%file_name), 'global', 'CEN_LAT', att_real32)
+      return_value%cen_lat = att_real32
+
+      call Get_netcdf_att (trim (return_value%file_name), 'global', 'CEN_LON', att_real32)
+      return_value%cen_lon = att_real32
+
+      call Get_netcdf_att (trim (return_value%file_name), 'global', 'TRUELAT1', att_real32)
+      return_value%truelat1 = att_real32
+
+      call Get_netcdf_att (trim (return_value%file_name), 'global', 'TRUELAT2', att_real32)
+      return_value%truelat2 = att_real32
+
+      call Get_netcdf_att (trim (return_value%file_name), 'global', 'STAND_LON', att_real32)
+      return_value%stand_lon = att_real32
+
+      call Get_netcdf_att (trim (return_value%file_name), 'global', 'DX', att_real32)
+      return_value%dx = att_real32
+
+      call Get_netcdf_att (trim (return_value%file_name), 'global', 'DY', att_real32)
+      return_value%dy = att_real32
+
+        ! latlon at mass points
+      call return_value%Get_latlons ()
+
+        ! latlon at corners
+      call return_value%Get_latcloncs ()
+
+        ! Init domain dimensions
+      return_value%ids = 1
+      call Get_netcdf_dim (trim (file_name), 'west_east_stag', att_int32)
+      return_value%ide = att_int32
+      return_value%jds = 1
+      call Get_netcdf_dim (trim (file_name), 'south_north_stag', att_int32)
+      return_value%jde = att_int32
+      return_value%kds = 1
+      call Get_netcdf_dim (trim (file_name), 'bottom_top_stag', att_int32)
+      return_value%kde = att_int32
+
+        ! Init rest of dimensions
+      return_value%ims = return_value%ids
+      return_value%ime = return_value%ide
+      return_value%kms = return_value%kds
+      return_value%kme = return_value%kde
+      return_value%jms = return_value%jds
+      return_value%jme = return_value%jde
+
+      return_value%its = return_value%ids
+      return_value%ite = return_value%ide
+      return_value%kts = return_value%kds
+      return_value%kte = return_value%kde
+      return_value%jts = return_value%jds
+      return_value%jte = return_value%jde
+
+      if (DEBUG_LOCAL) call return_value%Print_domain()
+
+        ! Init some vars to default values
+      allocate (return_value%z0(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%z0 = DEFAULT_Z0
+
+      allocate (return_value%rain(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%rain = DEFAULT_RAIN
+
+      allocate (return_value%t2(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%t2 = DEFAULT_T2
+
+      allocate (return_value%q2(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%q2 = DEFAULT_Q2
+
+      allocate (return_value%psfc(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%psfc = DEFAULT_PSFC
+
+      allocate (return_value%ua(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%ua = 0.0
+
+      allocate (return_value%va(return_value%ids:return_value%ide - 1, return_value%jds:return_value%jde - 1))
+      return_value%va = 0.0
+
+      if (DEBUG_LOCAL) Call Print_message ('Leaving wrf_t constructor')
+
+    end function Wrf_t_const
 
   end module wrfdata_mod
