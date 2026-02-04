@@ -3,7 +3,7 @@
     use state_mod, only : state_fire_t
     use namelist_mod, only : namelist_t
     use geogrid_mod, only : geogrid_t
-    use wrf_mod, only : wrf_t
+    use wrfdata_mod, only : wrfdata_t
     use fire_driver_mod, only : Init_fire_components
     use stderrout_mod, only: Print_message
 
@@ -17,7 +17,7 @@
 
       implicit none
 
-      type (wrf_t), intent (in out) :: atm_state
+      type (wrfdata_t), intent (in out) :: atm_state
       type (namelist_t), intent (in) :: config_flags
 
       logical, parameter :: DEBUG_LOCAL = .false.
@@ -25,7 +25,7 @@
 
       if (DEBUG_LOCAL) call Print_message ('  Entering subroutine Init_atm_state')
 
-      atm_state = wrf_t ('wrf.nc', config_flags)
+      atm_state = wrfdata_t ('wrf.nc', config_flags)
 
       if (DEBUG_LOCAL) call Print_message ('  Leaving subroutine Init_atm_state')
 
@@ -41,7 +41,7 @@
 
       type (state_fire_t), intent (in out) :: grid
       type (namelist_t), intent (in) :: config_flags
-      type (wrf_t), intent (in out), optional :: wrf
+      type (wrfdata_t), intent (in out), optional :: wrf
 
       type (geogrid_t) :: geogrid
       logical, parameter :: DEBUG_LOCAL = .false.
