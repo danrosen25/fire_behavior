@@ -2,7 +2,7 @@
 
     use fire_physics_mod, only: Calc_flame_length, Calc_fire_fluxes, Calc_smoke_emissions
     use level_set_mod, only: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, &
-        Stop_if_close_to_bdy, Copy_lfnout_to_lfn, Reinit_level_set_fast_dist
+        Stop_if_close_to_bdy, Copy_lfnout_to_lfn, Reinit_level_set_fast_dist, Check_isolated_negative_lfn
     use namelist_mod, only : namelist_t
     use ros_mod, only : ros_t
     use state_mod, only: state_fire_t, N_POINTS_IN_HALO
@@ -29,6 +29,7 @@
 
       integer :: ij, ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme
       real :: tbound, time_start
+      integer, parameter :: CHECK_ISOLATED_NEG_LFN = 0
       logical, parameter :: DEBUG_LOCAL = .false.
 
 
@@ -130,6 +131,8 @@
 #ifdef DM_PARALLEL
       call Do_halo_exchange_with_corners (grid%lfn, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
 #endif
+
+      if (CHECK_ISOLATED_NEG_LFN == 1) call Check_isolated_negative_lfn (grid)
  
       if (DEBUG_LOCAL) call Print_message ('calling Ignite_prescribed_fires...')
       !$OMP PARALLEL DO   &

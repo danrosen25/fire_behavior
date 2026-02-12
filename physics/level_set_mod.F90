@@ -20,7 +20,7 @@
     use ros_mod, only : ros_t
 
 #ifdef DM_PARALLEL
-    use mpi_mod, only : Do_halo_exchange
+    use mpi_mod, only : Do_halo_exchange, Sum_across_mpi_tasks, Max_across_mpi_tasks
 #endif
 
     implicit none
@@ -28,7 +28,7 @@
     private
 
     public :: Calc_fuel_left, Update_ignition_times, Reinit_level_set, Prop_level_set, Extrapol_var_at_bdys, Stop_if_close_to_bdy, &
-        Copy_lfnout_to_lfn, Reinit_level_set_fast_dist
+        Copy_lfnout_to_lfn, Reinit_level_set_fast_dist, Check_isolated_negative_lfn
 
     integer, parameter :: BDY_ENO1 = 10, FAST_DIST_REINIT_FSM = 1
     integer, parameter :: FAR = 0, TRIAL = 1, KNOWN = 2
@@ -290,6 +290,137 @@
       end do
 
     end subroutine Copy_lfnout_to_lfn
+
+    subroutine Check_isolated_negative_lfn (grid, threshold, min_size, max_size)
+
+      implicit none
+
+      type (state_fire_t), intent (in out) :: grid
+      real, intent (in), optional :: threshold
+      integer, intent (in), optional :: min_size, max_size
+
+      character (len = 256) :: msg
+      integer :: cluster_i, cluster_j, cluster_size, flagged_size
+      integer :: head, tail, i, ic, inb, j, jc, jnb, max_queue, min_size_value, max_size_value
+      integer :: nx_loc, ny_loc
+      logical :: found_cluster, touches_boundary
+      logical, dimension(:, :), allocatable :: visited
+      integer, dimension(:), allocatable :: queue_i, queue_j
+      real :: detection_flag, detection_sum, global_location_i, global_location_j, global_size_value
+      real :: location_i, location_j, size_value, threshold_value
+
+
+      threshold_value = 0.0
+      if (present (threshold)) threshold_value = threshold
+
+      min_size_value = 1
+      if (present (min_size)) min_size_value = min_size
+
+      max_size_value = 6
+      if (present (max_size)) max_size_value = max_size
+
+      if (max_size_value < min_size_value) return
+
+      nx_loc = grid%ifpe - grid%ifps + 1
+      ny_loc = grid%jfpe - grid%jfps + 1
+      if (nx_loc <= 0 .or. ny_loc <= 0) return
+      max_queue = nx_loc * ny_loc
+
+      allocate (visited(grid%ifps:grid%ifpe, grid%jfps:grid%jfpe))
+      allocate (queue_i(max_queue))
+      allocate (queue_j(max_queue))
+
+      visited = .false.
+      found_cluster = .false.
+      flagged_size = 0
+      cluster_i = grid%ifps
+      cluster_j = grid%jfps
+
+      Cluster_search: do j = grid%jfps, grid%jfpe
+        do i = grid%ifps, grid%ifpe
+          if (visited(i, j)) cycle
+          visited(i, j) = .true.
+          if (grid%lfn(i, j) >= threshold_value) cycle
+
+          head = 1
+          tail = 1
+          queue_i(1) = i
+          queue_j(1) = j
+          cluster_size = 0
+          touches_boundary = .false.
+
+          do while (head <= tail)
+            ic = queue_i(head)
+            jc = queue_j(head)
+            head = head + 1
+
+            cluster_size = cluster_size + 1
+            if (ic == grid%ifps .or. ic == grid%ifpe .or. jc == grid%jfps .or. jc == grid%jfpe) touches_boundary = .true.
+
+            do jnb = jc - 1, jc + 1
+              do inb = ic - 1, ic + 1
+                if (inb == ic .and. jnb == jc) cycle
+                if (inb < grid%ifps .or. inb > grid%ifpe) cycle
+                if (jnb < grid%jfps .or. jnb > grid%jfpe) cycle
+                if (visited(inb, jnb)) cycle
+                visited(inb, jnb) = .true.
+                if (grid%lfn(inb, jnb) >= threshold_value) cycle
+
+                tail = tail + 1
+                queue_i(tail) = inb
+                queue_j(tail) = jnb
+              end do
+            end do
+          end do
+
+          if (cluster_size >= min_size_value .and. cluster_size <= max_size_value .and. .not. touches_boundary) then
+            found_cluster = .true.
+            flagged_size = cluster_size
+            cluster_i = i
+            cluster_j = j
+            exit Cluster_search
+          end if
+        end do
+      end do Cluster_search
+
+      deallocate (visited)
+      deallocate (queue_i)
+      deallocate (queue_j)
+
+      detection_flag = 0.0
+      location_i = -1.0
+      location_j = -1.0
+      size_value = -1.0
+      if (found_cluster) then
+        detection_flag = 1.0
+        location_i = real (cluster_i)
+        location_j = real (cluster_j)
+        size_value = real (flagged_size)
+      end if
+
+#ifdef DM_PARALLEL
+      call Sum_across_mpi_tasks (detection_flag, grid%cart_comm, detection_sum)
+      call Max_across_mpi_tasks (location_i, grid%cart_comm, global_location_i)
+      call Max_across_mpi_tasks (location_j, grid%cart_comm, global_location_j)
+      call Max_across_mpi_tasks (size_value, grid%cart_comm, global_size_value)
+#else
+      detection_sum = detection_flag
+      global_location_i = location_i
+      global_location_j = location_j
+      global_size_value = size_value
+#endif
+
+      if (detection_sum > 0.0) then
+        grid%datetime_now = grid%datetime_start
+        call grid%datetime_now%Add_seconds (grid%itimestep * grid%dt)
+        call grid%Save_state ()
+
+        write (msg, '(a, i6, a, i6, a, i6, a)') 'Isolated negative LFN cluster (size', int (global_size_value), ') near (i=', &
+            int (global_location_i), ', j=', int (global_location_j), '). Simulation stopped after saving state.'
+        call Stop_simulation (trim (msg))
+      end if
+
+    end subroutine Check_isolated_negative_lfn
 
     subroutine Prop_level_set (ifds, ifde, jfds, jfde, ifms, ifme, jfms, jfme, &
         num_tiles, i_start, i_end, j_start, j_end, ts, dt, dx, dy, fire_upwinding, fire_viscosity, &
