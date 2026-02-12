@@ -88,15 +88,7 @@
       ros_wind = ros_wind * cor_wind
       ros_slope = ros_slope * cor_slope
 
-        ! Limit the ros
-      excess = ros_base + ros_wind + ros_slope - ROS_MAX
-      if (excess > 0.0) then
-          ! take excess out of wind and slope in proportion
-        ros_wind = ros_wind - excess * ros_wind / (ros_wind + ros_slope)
-        ros_slope = ros_slope - excess * ros_slope/ (ros_wind + ros_slope)
-      end if
-
-      return_value = ros_base + ros_wind + SLOPE_FACTOR * ros_slope
+      return_value = min (ros_base + ros_wind + SLOPE_FACTOR * ros_slope, ROS_MAX)
       if (FIRE_GROWS_ONLY) return_value = max (return_value, 0.0)
 
     end function Calc_ros_wrffire
