@@ -1015,9 +1015,9 @@
           difflx = (lfn(i, j) - lfn(i - 1, j)) / dx
           diffry = (lfn(i, j + 1) - lfn(i, j)) / dy
           diffly = (lfn(i, j) - lfn(i, j - 1)) / dy
-            ! twice central difference
-          diffcx = difflx + diffrx
-          diffcy = diffly + diffry
+            ! central difference
+          diffcx = 0.5 * (difflx + diffrx)
+          diffcy = 0.5 * (diffly + diffry)
             ! use eno1 near domain boundaries
           if (i < ids + BDY_ENO1 .or. i > ide - BDY_ENO1 .or. &
               j < jds + BDY_ENO1 .or. j > jde - BDY_ENO1) then 
