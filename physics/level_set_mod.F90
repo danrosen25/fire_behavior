@@ -987,7 +987,7 @@
 
       real, parameter :: EPS = epsilon (0.0), TOL = 100.0 * EPS
       real :: difflx, diffly, diffrx, diffry, diffcx, diffcy, &
-         diff2x, diff2y, grad, gradx, grady, mask, diff2x_eno, diff2y_eno, &
+         diff2x, diff2y, grad, mask, diff2x_eno, diff2y_eno, &
          diff2x_weno, diff2y_weno, transition_width, band_width, &
          scale, nvx, nvy, a_valor, signo_x, signo_y, threshold_hll, &
          threshold_hlu, threshold_av, fire_viscosity_var
@@ -1067,13 +1067,13 @@
               case(4)
                   ! Sethian - twice stronger pushdown of bumps
                 grad = sqrt (max (difflx, 0.0) ** 2 + min (diffrx, 0.0) ** 2 + &
-                    max (diffly, 0.0) ** 2 + min(diffry, 0.0) ** 2)
+                    max (diffly, 0.0) ** 2 + min (diffry, 0.0) ** 2)
 
                 scale = sqrt (grad ** 2.0 + EPS)
-                gradx = max(difflx,0.0) - min(diffrx,0.0)
-                grady = max(diffly,0.0) - min(diffry,0.0)
-                nvx = gradx / scale
-                nvy = grady / scale
+                diff2x = max (difflx, 0.0) - min (diffrx, 0.0)
+                diff2y = max (diffly, 0.0) - min (diffry, 0.0)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
 
               case(5)
                   ! 2nd order
