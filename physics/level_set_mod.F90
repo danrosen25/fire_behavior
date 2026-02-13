@@ -986,7 +986,7 @@
 
       real, parameter :: EPS = epsilon (0.0), TOL = 100.0 * EPS
       real :: difflx, diffly, diffrx, diffry, diffcx, diffcy, &
-         diff2x, diff2y, grad, &
+         diff2x, diff2y, grad, gradx, grady, &
          scale, nvx, nvy, a_valor, signo_x, signo_y, threshold_hll, &
          threshold_hlu, threshold_av, fire_viscosity_var
       integer :: i, j
@@ -1024,40 +1024,67 @@
             grad = sqrt (diff2x * diff2x + diff2y * diff2y)
           else
             select case (fire_upwinding)
-                ! none
               case (0)
+                  ! none
                 grad = sqrt (diffcx ** 2 + diffcy ** 2)
 
-                ! standard
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diffcx / scale
+                nvy = diffcy / scale
+
               case (1)
+                  ! standard
                 diff2x = Select_upwind (difflx, diffrx)
                 diff2y = Select_upwind (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                ! godunov per osher/fedkiw
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case (2)
+                  ! godunov per osher/fedkiw
                 diff2x = Select_godunov (difflx, diffrx)
                 diff2y = Select_godunov (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                ! ENO1
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case (3)
+                  ! ENO1
                 diff2x = Select_eno (difflx, diffrx)
                 diff2y = Select_eno (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                ! Sethian - twice stronger pushdown of bumps
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case(4)
-                grad = sqrt (max (difflx, 0.0) ** 2 + min (diffrx, 0.0) ** 2 &
-                    + max (diffly, 0.0) ** 2 + min(diffry, 0.0) ** 2)
-                ! 2nd order
+                  ! Sethian - twice stronger pushdown of bumps
+                grad = sqrt (max (difflx, 0.0) ** 2 + min (diffrx, 0.0) ** 2 + &
+                    max (diffly, 0.0) ** 2 + min(diffry, 0.0) ** 2)
+
+                scale = sqrt (grad ** 2.0 + EPS)
+                gradx = max(difflx,0.0) - min(diffrx,0.0)
+                grady = max(diffly,0.0) - min(diffry,0.0)
+                nvx = gradx / scale
+                nvy = grady / scale
+
               case(5)
+                  ! 2nd order
                 diff2x = Select_2nd (dx, lfn(i, j), lfn(i - 1, j), lfn(i + 1, j))
                 diff2y = Select_2nd (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j + 1))
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                ! WENO3
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case(6)
+                  ! WENO3
                 a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j) + &
                     Select_4th (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2)) * vf(i, j)
                 signo_x = a_valor * Select_4th (dx, lfn(i, j), lfn(i - 1, j), &
@@ -1070,8 +1097,12 @@
                     lfn(i, j + 1), lfn(i, j + 2), signo_y)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                ! WENO5
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case(7)
+                  ! WENO5
                 a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j)+ &
                     Select_4th (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2)) * vf(i, j)
                 signo_x = a_valor * Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j))
@@ -1082,8 +1113,12 @@
                     lfn(i ,j - 3), lfn(i, j + 1), lfn(i, j + 2), lfn(i, j + 3), signo_y)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                ! WENO3/ENO1
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case(8)
+                  ! WENO3/ENO1
                 if (abs (lfn(i, j)) < threshold_hlu) then
                   a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j) + &
                       Select_4th (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2)) * vf(i, j)
@@ -1102,8 +1137,12 @@
                   grad = sqrt (diff2x * diff2x + diff2y * diff2y)
                 end if
 
-                ! WENO5/ENO1
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case(9)
+                  ! WENO5/ENO1
                 if (abs (lfn(i, j)) < threshold_hlu) then
                   a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j) + &
                       Select_4th (dy,lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2)) * vf(i, j)
@@ -1122,6 +1161,10 @@
                   grad = sqrt (diff2x * diff2x + diff2y * diff2y)
                 end if
 
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
               case default
                 !$omp critical
                 write (msg, '(a, i2)') 'Unknown upwinding option in level set : ', fire_upwinding
@@ -1130,11 +1173,6 @@
 
             end select
           end if
-
-            ! Calc normal
-          scale = sqrt (grad ** 2.0 + EPS)
-          nvx = diff2x / scale
-          nvy = diff2y / scale
 
             ! Get rate of spread from wind speed and slope
           ros(i, j) = ros_model%Calc_ros (ifms, ifme, jfms, jfme, i, j, &
