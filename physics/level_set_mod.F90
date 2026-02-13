@@ -18,6 +18,7 @@
     use state_mod, only: state_fire_t, N_POINTS_IN_HALO
     use ignition_line_mod, only : ignition_line_t
     use ros_mod, only : ros_t
+    use constants_mod, only : PI
 
 #ifdef DM_PARALLEL
     use mpi_mod, only : Do_halo_exchange, Sum_across_mpi_tasks, Max_across_mpi_tasks
@@ -986,7 +987,8 @@
 
       real, parameter :: EPS = epsilon (0.0), TOL = 100.0 * EPS
       real :: difflx, diffly, diffrx, diffry, diffcx, diffcy, &
-         diff2x, diff2y, grad, gradx, grady, &
+         diff2x, diff2y, grad, gradx, grady, mask, diff2x_eno, diff2y_eno, &
+         diff2x_weno, diff2y_weno, transition_width, band_width, &
          scale, nvx, nvy, a_valor, signo_x, signo_y, threshold_hll, &
          threshold_hlu, threshold_av, fire_viscosity_var
       integer :: i, j
@@ -1160,6 +1162,47 @@
                   diff2y = Select_eno (diffly, diffry)
                   grad = sqrt (diff2x * diff2x + diff2y * diff2y)
                 end if
+
+                scale = sqrt (grad ** 2.0 + EPS)
+                nvx = diff2x / scale
+                nvy = diff2y / scale
+
+              case(10)
+                  ! WENO5/ENO1 + blending zone
+                band_width = 2 * threshold_hlu
+                transition_width = threshold_hlu
+                if (abs(lfn(i, j)) <= band_width) then
+                  if (abs(lfn(i, j)) <= band_width - transition_width) then
+                    mask = 1.0
+                  else
+                    mask = 0.5 * (1.0 + cos (PI * (abs (lfn(i, j)) -(band_width - transition_width)) / transition_width))
+                  end if
+                else
+                  mask = 0.0
+                end if
+
+                diff2x_eno = Select_eno (difflx, diffrx)
+                diff2y_eno = Select_eno (diffly, diffry)
+
+                if (mask > 0.0) then
+                  a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j) + &
+                      Select_4th (dy,lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2)) * vf(i, j)
+                  signo_x = a_valor * Select_4th (dx, lfn(i, j), lfn(i - 1, j), &
+                      lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j))
+                  signo_y = a_valor * Select_4th (dy, lfn(i, j), lfn(i, j - 1), &
+                      lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2))
+                  diff2x_weno = Select_weno5 (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), &
+                      lfn(i - 3, j), lfn(i + 1, j), lfn(i + 2, j), lfn(i + 3, j), signo_x)
+                  diff2y_weno = Select_weno5 (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), &
+                      lfn(i, j - 3), lfn(i, j + 1), lfn(i, j + 2), lfn(i, j + 3), signo_y)
+                  diff2x = mask * diff2x_weno + (1.0 - mask) * diff2x_eno
+                  diff2y = mask * diff2y_weno + (1.0 - mask) * diff2y_eno
+                else
+                  diff2x = diff2x_eno
+                  diff2y = diff2y_eno
+                end if
+
+                grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
                 scale = sqrt (grad ** 2.0 + EPS)
                 nvx = diff2x / scale
