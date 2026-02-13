@@ -1028,11 +1028,13 @@
             select case (fire_upwinding)
               case (0)
                   ! none
-                grad = sqrt (diffcx ** 2 + diffcy ** 2)
+                diff2x = diffcx
+                diff2y = diffcy
+                grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
                 scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diffcx / scale
-                nvy = diffcy / scale
+                nvx = diff2x / scale
+                nvy = diff2y / scale
 
               case (1)
                   ! standard
