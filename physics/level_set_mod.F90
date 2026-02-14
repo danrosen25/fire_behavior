@@ -1015,15 +1015,21 @@
           difflx = (lfn(i, j) - lfn(i - 1, j)) / dx
           diffry = (lfn(i, j + 1) - lfn(i, j)) / dy
           diffly = (lfn(i, j) - lfn(i, j - 1)) / dy
-            ! central difference
+
+            ! central differences
           diffcx = 0.5 * (difflx + diffrx)
           diffcy = 0.5 * (diffly + diffry)
+
             ! use eno1 near domain boundaries
           if (i < ids + BDY_ENO1 .or. i > ide - BDY_ENO1 .or. &
               j < jds + BDY_ENO1 .or. j > jde - BDY_ENO1) then 
             diff2x = Select_eno (difflx, diffrx)
             diff2y = Select_eno (diffly, diffry)
             grad = sqrt (diff2x * diff2x + diff2y * diff2y)
+
+            scale = sqrt (grad ** 2.0 + EPS)
+            nvx = diff2x / scale
+            nvy = diff2y / scale
           else
             select case (fire_upwinding)
               case (0)
