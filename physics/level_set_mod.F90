@@ -1027,9 +1027,6 @@
             diff2y = Select_eno (diffly, diffry)
             grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-            scale = sqrt (grad ** 2.0 + EPS)
-            nvx = diff2x / scale
-            nvy = diff2y / scale
           else
             select case (fire_upwinding)
               case (0)
@@ -1038,19 +1035,11 @@
                 diff2y = diffcy
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
-
               case (1)
                   ! First-order sign-consistent upwind scheme (component wise). Standard
                 diff2x = Select_upwind (difflx, diffrx)
                 diff2y = Select_upwind (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
-
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
 
               case (2)
                   ! Component-wise Godunov upwind (1st order) derivative selection
@@ -1058,19 +1047,11 @@
                 diff2y = Select_godunov (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
-
               case (3)
                   ! First order ENO (minmod limited) componenet-wise gradient
                 diff2x = Select_eno (difflx, diffrx)
                 diff2y = Select_eno (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
-
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
 
               case (4)
                   ! Classical Godunov discretization of the Hamiltonian
@@ -1079,19 +1060,11 @@
                 diff2x = max (difflx, 0.0) - min (diffrx, 0.0)
                 diff2y = max (diffly, 0.0) - min (diffry, 0.0)
 
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
-
               case (5)
                   ! 2nd order central differences
                 diff2x = Select_2nd (dx, lfn(i, j), lfn(i - 1, j), lfn(i + 1, j))
                 diff2y = Select_2nd (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j + 1))
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
-
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
 
               case (6)
                   ! 3rd order WENO
@@ -1107,10 +1080,6 @@
                     lfn(i, j + 1), lfn(i, j + 2), signo_y)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
-
               case (7)
                   ! 5th order WENO
                 a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j)+ &
@@ -1122,10 +1091,6 @@
                 diff2y = Select_weno5 (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), &
                     lfn(i ,j - 3), lfn(i, j + 1), lfn(i, j + 2), lfn(i, j + 3), signo_y)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
-
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
 
               case (8)
                   ! WENO3/ENO1
@@ -1147,10 +1112,6 @@
                   grad = sqrt (diff2x * diff2x + diff2y * diff2y)
                 end if
 
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
-
               case (9)
                   ! WENO5/ENO1
                 if (abs (lfn(i, j)) < threshold_hlu) then
@@ -1170,10 +1131,6 @@
                   diff2y = Select_eno (diffly, diffry)
                   grad = sqrt (diff2x * diff2x + diff2y * diff2y)
                 end if
-
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
 
               case (10)
                   ! WENO5/ENO1 + blending zone
@@ -1212,10 +1169,6 @@
 
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
 
-                scale = sqrt (grad ** 2.0 + EPS)
-                nvx = diff2x / scale
-                nvy = diff2y / scale
-
               case default
                 !$omp critical
                 write (msg, '(a, i2)') 'Unknown upwinding option in level set : ', fire_upwinding
@@ -1224,6 +1177,11 @@
 
             end select
           end if
+
+            ! Calc normal
+          scale = sqrt (grad ** 2.0 + EPS)
+          nvx = diff2x / scale
+          nvy = diff2y / scale
 
             ! Get rate of spread from wind speed and slope
           ros(i, j) = ros_model%Calc_ros (ifms, ifme, jfms, jfme, i, j, &
