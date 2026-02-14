@@ -1043,7 +1043,7 @@
                 nvy = diff2y / scale
 
               case (1)
-                  ! standard
+                  ! First-order sign-consistent upwind scheme (component wise). Standard
                 diff2x = Select_upwind (difflx, diffrx)
                 diff2y = Select_upwind (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
@@ -1053,7 +1053,7 @@
                 nvy = diff2y / scale
 
               case (2)
-                  ! godunov per osher/fedkiw
+                  ! Component-wise Godunov upwind (1st order) derivative selection
                 diff2x = Select_godunov (difflx, diffrx)
                 diff2y = Select_godunov (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
@@ -1063,7 +1063,7 @@
                 nvy = diff2y / scale
 
               case (3)
-                  ! ENO1
+                  ! First order ENO (minmod limited) componenet-wise gradient
                 diff2x = Select_eno (difflx, diffrx)
                 diff2y = Select_eno (diffly, diffry)
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
@@ -1072,19 +1072,19 @@
                 nvx = diff2x / scale
                 nvy = diff2y / scale
 
-              case(4)
-                  ! Sethian - twice stronger pushdown of bumps
+              case (4)
+                  ! Classical Godunov discretization of the Hamiltonian
                 grad = sqrt (max (difflx, 0.0) ** 2 + min (diffrx, 0.0) ** 2 + &
                     max (diffly, 0.0) ** 2 + min (diffry, 0.0) ** 2)
-
-                scale = sqrt (grad ** 2.0 + EPS)
                 diff2x = max (difflx, 0.0) - min (diffrx, 0.0)
                 diff2y = max (diffly, 0.0) - min (diffry, 0.0)
+
+                scale = sqrt (grad ** 2.0 + EPS)
                 nvx = diff2x / scale
                 nvy = diff2y / scale
 
-              case(5)
-                  ! 2nd order
+              case (5)
+                  ! 2nd order central differences
                 diff2x = Select_2nd (dx, lfn(i, j), lfn(i - 1, j), lfn(i + 1, j))
                 diff2y = Select_2nd (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j + 1))
                 grad = sqrt (diff2x * diff2x + diff2y * diff2y)
@@ -1093,8 +1093,8 @@
                 nvx = diff2x / scale
                 nvy = diff2y / scale
 
-              case(6)
-                  ! WENO3
+              case (6)
+                  ! 3rd order WENO
                 a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j) + &
                     Select_4th (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2)) * vf(i, j)
                 signo_x = a_valor * Select_4th (dx, lfn(i, j), lfn(i - 1, j), &
@@ -1111,8 +1111,8 @@
                 nvx = diff2x / scale
                 nvy = diff2y / scale
 
-              case(7)
-                  ! WENO5
+              case (7)
+                  ! 5th order WENO
                 a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j)+ &
                     Select_4th (dy, lfn(i, j), lfn(i, j - 1), lfn(i, j - 2), lfn(i, j + 1), lfn(i, j + 2)) * vf(i, j)
                 signo_x = a_valor * Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j))
@@ -1127,7 +1127,7 @@
                 nvx = diff2x / scale
                 nvy = diff2y / scale
 
-              case(8)
+              case (8)
                   ! WENO3/ENO1
                 if (abs (lfn(i, j)) < threshold_hlu) then
                   a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j) + &
@@ -1151,7 +1151,7 @@
                 nvx = diff2x / scale
                 nvy = diff2y / scale
 
-              case(9)
+              case (9)
                   ! WENO5/ENO1
                 if (abs (lfn(i, j)) < threshold_hlu) then
                   a_valor = Select_4th (dx, lfn(i, j), lfn(i - 1, j), lfn(i - 2, j), lfn(i + 1, j), lfn(i + 2, j)) * uf(i, j) + &
@@ -1175,7 +1175,7 @@
                 nvx = diff2x / scale
                 nvy = diff2y / scale
 
-              case(10)
+              case (10)
                   ! WENO5/ENO1 + blending zone
                 band_width = 2 * threshold_hlu
                 transition_width = threshold_hlu
