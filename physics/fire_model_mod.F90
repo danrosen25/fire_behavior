@@ -113,7 +113,7 @@
           ifds, ifde, jfds, jfde, time_start, grid%dt, grid%dx, grid%dy, config_flags%fire_upwinding_reinit, &
           config_flags%fire_lsm_reinit_iter, config_flags%fire_lsm_band_ngp, grid%lfn, grid%lfn_2, grid%lfn_s0, &
           grid%lfn_s1, grid%lfn_s2, grid%lfn_s3, grid%lfn_out, grid%tign_g, grid%cart_comm, &
-          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe)
+          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, config_flags%reinit_pseudot_coef)
 
       if (DEBUG_LOCAL) call Print_message ('calling Copy_lfnout_to_lfn...')
       !$OMP PARALLEL DO   &

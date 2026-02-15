@@ -57,6 +57,7 @@
       integer :: fire_upwinding_reinit = 4    ! "numerical scheme (space) for reinitialization PDE: 1=WENO3, 2=WENO5, 3=hybrid WENO3-ENO1, 4=hybrid WENO5-ENO1"
       integer :: fire_lsm_band_ngp = 4        ! "number of grid points around lfn=0 that WENO5/3 is used (ENO1 elsewhere),
                                               ! for fire_upwinding_reinit=4,5 and fire_upwinding=8,9 options"
+      real :: reinit_pseudot_coef = 0.01      ! Coefficient for the pseudo time
 
       integer :: fast_dist_reinit_opt = 0     ! Fast distance reinitialization method (or eikonal solver): 0) None, 1) FSM
       integer :: fast_dist_reinit_freq = 600  ! Number of time steps to perform a reinit with fast distance reinit method
@@ -184,6 +185,7 @@
       call Broadcast_integer (this%fire_lsm_reinit_iter)
       call Broadcast_integer (this%fire_upwinding_reinit)
       call Broadcast_integer (this%fire_lsm_band_ngp)
+      call Broadcast_real (this%reinit_pseudot_coef)
       call Broadcast_integer (this%fast_dist_reinit_opt)
       call Broadcast_integer (this%fast_dist_reinit_freq)
       call Broadcast_logical (this%fire_lsm_zcoupling)
@@ -406,7 +408,7 @@
           fast_dist_reinit_opt, fast_dist_reinit_freq, fire_viscosity_ngp, wind_vinterp_opt, hinterp_opt, ideal_opt, &
           fuel_opt, ros_opt, fmc_opt, emis_opt, fmoist_freq
       real :: fire_atm_feedback, fire_viscosity, fire_lsm_zcoupling_ref, fire_viscosity_bg, fire_viscosity_band, &
-          fmoist_dt, fire_wind_height, frac_fburnt_to_smoke, fuelmc_g, fuelmc_g_live, fuelmc_c
+          fmoist_dt, fire_wind_height, frac_fburnt_to_smoke, fuelmc_g, fuelmc_g_live, fuelmc_c, reinit_pseudot_coef
       logical :: fire_lsm_reinit, fire_lsm_zcoupling, fmoist_run, fire_is_real_perim
 
         ! ignitions
@@ -427,7 +429,7 @@
           fire_lsm_band_ngp, fire_lsm_zcoupling, fire_lsm_zcoupling_ref, fire_viscosity_bg, fire_viscosity_band, &
           fire_viscosity_ngp, fmoist_run, fmoist_freq, fmoist_dt, fire_wind_height, fire_is_real_perim, &
           frac_fburnt_to_smoke, fuelmc_g, fuelmc_g_live, fuelmc_c, ideal_opt, fuel_opt, ros_opt, fmc_opt, emis_opt, &
-          wind_vinterp_opt, hinterp_opt, &
+          wind_vinterp_opt, hinterp_opt, reinit_pseudot_coef, &
             ! Ignitions
           fire_num_ignitions, &
             ! Ignition 1
@@ -459,6 +461,7 @@
       fire_lsm_reinit_iter = this%fire_lsm_reinit_iter
       fire_upwinding_reinit = this%fire_upwinding_reinit
       fire_lsm_band_ngp = this%fire_lsm_band_ngp
+      reinit_pseudot_coef = this%reinit_pseudot_coef
       fast_dist_reinit_opt = this%fast_dist_reinit_opt
       fast_dist_reinit_freq = this%fast_dist_reinit_freq
       fire_lsm_zcoupling = this%fire_lsm_zcoupling
@@ -553,6 +556,7 @@
       this%fire_lsm_reinit_iter = fire_lsm_reinit_iter
       this%fire_upwinding_reinit = fire_upwinding_reinit
       this%fire_lsm_band_ngp = fire_lsm_band_ngp
+      this%reinit_pseudot_coef = reinit_pseudot_coef
       this%fast_dist_reinit_opt = fast_dist_reinit_opt
       this%fast_dist_reinit_freq = fast_dist_reinit_freq
       this%fire_lsm_zcoupling = fire_lsm_zcoupling

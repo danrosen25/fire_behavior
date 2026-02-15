@@ -618,7 +618,7 @@
         ifds, ifde, jfds, jfde, ts, dt, dx, dy, fire_upwinding_reinit, &
         fire_lsm_reinit_iter, fire_lsm_band_ngp, lfn_in, lfn_2, lfn_s0, &
         lfn_s1, lfn_s2, lfn_s3, lfn_out, tign, cart_comm, &
-        ifps, ifpe, jfps, jfpe)
+        ifps, ifpe, jfps, jfpe, reinit_pseudot_coef)
 
     ! Purpose: Level-set function reinitialization
     !
@@ -640,7 +640,7 @@
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_in, tign
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_2, lfn_s0, lfn_s1, lfn_s2, lfn_s3
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_out
-      real, intent (in) :: dx, dy, ts, dt
+      real, intent (in) :: reinit_pseudot_coef, dx, dy, ts, dt
 
       real :: dt_s, threshold_hlu
       integer :: nts, i, j, ij, ifts, ifte, jfts, jfte
@@ -683,8 +683,7 @@
       end do
       !$OMP END PARALLEL DO
 
-      dt_s = 0.01 * dx
-                  dt_s = 0.0001 * dx
+      dt_s = reinit_pseudot_coef * dx
 
         ! iterate to solve to steady state reinit PDE
         ! 1 iter each time step is enoguh
