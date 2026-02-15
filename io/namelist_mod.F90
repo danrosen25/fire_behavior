@@ -159,6 +159,7 @@
 
         ! Devel block
       integer :: check_isolated_neg_lfn = 0   ! 0) Nothing, 1) Check for isolated negative values of the level set function
+      integer :: output_level = 0             ! 0) Standard output, >0) Specialized output
     contains
       procedure, public :: Broadcast_nml => Broadcast_nml
       procedure, public :: Check_nml => Check_nml
@@ -308,6 +309,7 @@
 
         ! Devel block
       call Broadcast_integer (this%check_isolated_neg_lfn)
+      call Broadcast_integer (this%output_level)
     contains
 
       subroutine Broadcast_integer (val)
@@ -412,14 +414,15 @@
       class (namelist_t), intent (in out) :: this
       character (len = *), intent (in) :: file_name
 
-      integer :: check_isolated_neg_lfn
+      integer :: check_isolated_neg_lfn, output_level
       integer :: unit_nml, io_stat
       character (len = :), allocatable :: msg
 
-      namelist /devel/ check_isolated_neg_lfn
+      namelist /devel/ check_isolated_neg_lfn, output_level
 
 
       check_isolated_neg_lfn = this%check_isolated_neg_lfn
+      output_level = this%output_level
 
       open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
       if (io_stat /= 0) then
@@ -432,6 +435,7 @@
       close (unit_nml)
 
       this%check_isolated_neg_lfn = check_isolated_neg_lfn
+      this%output_level = output_level
 
     end subroutine Init_devel_block
 

@@ -52,7 +52,7 @@
           config_flags%fire_upwinding, config_flags%fire_viscosity, config_flags%fire_viscosity_bg, config_flags%fire_viscosity_band, &
           config_flags%fire_viscosity_ngp, config_flags%fire_lsm_band_ngp, tbound, grid%lfn, grid%lfn_0, grid%lfn_1, grid%lfn_2, &
           grid%lfn_out, grid%tign_g, grid%ros, grid%uf, grid%vf, grid%dzdxf, grid%dzdyf, grid%ros_param, grid%cart_comm, &
-          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe)
+          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, grid%grad_norm_ls)
 
       if (DEBUG_LOCAL) call Print_message ('calling Stop_if_close_to_bdy...')
       !$OMP PARALLEL DO   &
@@ -112,7 +112,7 @@
           ifds, ifde, jfds, jfde, time_start, grid%dt, grid%dx, grid%dy, config_flags%fire_upwinding_reinit, &
           config_flags%fire_lsm_reinit_iter, config_flags%fire_lsm_band_ngp, grid%lfn, grid%lfn_2, grid%lfn_s0, &
           grid%lfn_s1, grid%lfn_s2, grid%lfn_s3, grid%lfn_out, grid%tign_g, grid%cart_comm, &
-          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, config_flags%reinit_pseudot_coef)
+          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, config_flags%reinit_pseudot_coef, grid%grad_norm_reinit)
 
       if (DEBUG_LOCAL) call Print_message ('calling Copy_lfnout_to_lfn...')
       !$OMP PARALLEL DO   &

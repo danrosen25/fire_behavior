@@ -427,7 +427,7 @@
         num_tiles, i_start, i_end, j_start, j_end, ts, dt, dx, dy, fire_upwinding, fire_viscosity, &
         fire_viscosity_bg, fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, &
         tbound, lfn_in, lfn_0, lfn_1, lfn_2, lfn_out, tign, ros, uf, vf, dzdxf, dzdyf, ros_model, cart_comm, &
-        ifps, ifpe, jfps, jfpe)
+        ifps, ifpe, jfps, jfpe, grad_norm_ls)
 
       ! Purpose: Advance the level set function from time ts to time ts + dt
 
@@ -439,7 +439,7 @@
       real, intent(in) :: fire_viscosity, fire_viscosity_bg, fire_viscosity_band
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: uf, vf, dzdxf, dzdyf
       real, dimension(ifms:ifme, jfms:jfme), intent (in out) :: lfn_in, tign, lfn_1, lfn_2, lfn_0
-      real, dimension(ifms:ifme, jfms:jfme), intent (out) :: lfn_out, ros
+      real, dimension(ifms:ifme, jfms:jfme), intent (out) :: lfn_out, ros, grad_norm_ls
       real, intent (in) :: dx, dy, ts, dt
       real, intent (out) :: tbound
       class (ros_t), intent (in) :: ros_model
@@ -488,7 +488,7 @@
         call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
             ifms, ifme, jfms, jfme, ts, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
 
         tbound_min = min(tbound_min, tbound_thread)
       end do
@@ -531,7 +531,7 @@
         call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
             ifms,ifme,jfms,jfme, ts + dt, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
 
             tbound_min = min(tbound_min, tbound_thread)
       end do
@@ -573,7 +573,7 @@
         call Calc_tend_ls (ifds,ifde,jfds,jfde, ifts, ifte, jfts, jfte, &
             ifms, ifme, jfms, jfme, ts + dt, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
 
         tbound_min = min(tbound_min, tbound_thread)
       end do
@@ -618,7 +618,7 @@
         ifds, ifde, jfds, jfde, ts, dt, dx, dy, fire_upwinding_reinit, &
         fire_lsm_reinit_iter, fire_lsm_band_ngp, lfn_in, lfn_2, lfn_s0, &
         lfn_s1, lfn_s2, lfn_s3, lfn_out, tign, cart_comm, &
-        ifps, ifpe, jfps, jfpe, reinit_pseudot_coef)
+        ifps, ifpe, jfps, jfpe, reinit_pseudot_coef, grad_norm_reinit)
 
     ! Purpose: Level-set function reinitialization
     !
@@ -640,6 +640,7 @@
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_in, tign
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_2, lfn_s0, lfn_s1, lfn_s2, lfn_s3
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_out
+      real, dimension (ifms:ifme, jfms:jfme), intent (out) :: grad_norm_reinit
       real, intent (in) :: reinit_pseudot_coef, dx, dy, ts, dt
 
       real :: dt_s, threshold_hlu
@@ -700,7 +701,7 @@
           call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
               ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
               lfn_s0, lfn_s3, lfn_s3, lfn_s1, 1.0 / 3.0, & ! sign funcition, initial ls, current stage ls, next stage advanced ls, RK coefficient
-              fire_upwinding_reinit)
+              fire_upwinding_reinit, grad_norm_reinit)
         end do
         !$OMP END PARALLEL DO
  
@@ -733,7 +734,7 @@
           call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
               ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
               lfn_s0, lfn_s3, lfn_s1, lfn_s2, 1.0 / 2.0, &
-              fire_upwinding_reinit)
+              fire_upwinding_reinit, grad_norm_reinit)
         end do
         !$OMP END PARALLEL DO
 
@@ -766,7 +767,7 @@
           call Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
               ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, &
               lfn_s0, lfn_s3, lfn_s2, lfn_s3, 1.0, &
-              fire_upwinding_reinit)
+              fire_upwinding_reinit, grad_norm_reinit)
         end do
         !$OMP END PARALLEL DO
 
@@ -811,7 +812,7 @@
 
     subroutine Advance_ls_reinit (ifms, ifme, jfms, jfme, ifds, ifde, jfds, jfde, &
         ifts, ifte, jfts, jfte, dx, dy, dt_s, threshold_hlu, lfn_s0, &
-        lfn_ini, lfn_curr, lfn_fin, rk_coeff, fire_upwinding_reinit)
+        lfn_ini, lfn_curr, lfn_fin, rk_coeff, fire_upwinding_reinit, grad_norm_reinit)
 
       ! Calculates right-hand-side forcing and advances a RK-stage the level-set reinitialization PDE
 
@@ -822,6 +823,7 @@
       integer, intent (in) :: fire_upwinding_reinit
       real, dimension (ifms:ifme, jfms:jfme), intent (in) :: lfn_s0, lfn_ini, lfn_curr
       real, dimension (ifms:ifme, jfms:jfme), intent (in out) :: lfn_fin
+      real, dimension (ifms:ifme, jfms:jfme), intent (out) :: grad_norm_reinit
       real, intent (in) :: dx, dy, dt_s, threshold_hlu, rk_coeff
 
       integer :: i, j
@@ -930,6 +932,7 @@
             end select
           end if
             grad = sqrt (diff2x * diff2x + diff2y * diff2y)
+            grad_norm_reinit(i, j) = grad
             tend_r = lfn_s0(i, j) * (1.0 - grad)
             lfn_fin(i, j) = lfn_ini(i, j) + (dt_s * rk_coeff) * tend_r
         end do
@@ -969,7 +972,7 @@
 
     subroutine Calc_tend_ls (ids, ide, jds, jde, its, ite, jts, jte, ifms, ifme, jfms, jfme, &
         t, dt, dx, dy, fire_upwinding, fire_viscosity, fire_viscosity_bg, &
-        fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, lfn, tbound, tend, ros, uf, vf, dzdxf, dzdyf, ros_model)
+        fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, lfn, tbound, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
 
       ! compute the right hand side of the level set equation
 
@@ -980,7 +983,7 @@
       real, intent (in) :: fire_viscosity, fire_viscosity_bg, fire_viscosity_band, t, dt, dx, dy
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: uf, vf, dzdxf, dzdyf
       real, dimension(ifms:ifme, jfms:jfme), intent (in out) :: lfn
-      real, dimension(ifms:ifme, jfms:jfme), intent (out) :: tend, ros
+      real, dimension(ifms:ifme, jfms:jfme), intent (out) :: tend, ros, grad_norm_ls
       real, intent (out) :: tbound
       class (ros_t), intent (in) :: ros_model
 
@@ -1176,6 +1179,8 @@
 
             end select
           end if
+
+          grad_norm_ls(i, j) = grad
 
             ! Calc normal
           scale = sqrt (grad ** 2.0 + EPS)
