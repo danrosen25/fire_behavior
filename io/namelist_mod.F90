@@ -78,6 +78,7 @@
       real :: fmoist_dt = 600.0               ! moisture model time step [s]
 
       integer :: ideal_opt = 0                ! 0) real world, 1) ideal
+      integer :: devel_opt = 0                ! 0) Standard nml options, 1) reads options in the devel nml block
 
         ! Objects
       integer :: fuel_opt = FUEL_ANDERSON     !  1) Anderson 13 
@@ -155,10 +156,14 @@
         ! Atm block
       integer :: interval_atm = -1            ! Time step [s] of the atm (or frequency to read atm data if offline)
       integer :: kde = 1                      ! Number of atm vertical levels
+
+        ! Devel block
+      integer :: check_isolated_neg_lfn = 0   ! 0) Nothing, 1) Check for isolated negative values of the level set function
     contains
       procedure, public :: Broadcast_nml => Broadcast_nml
       procedure, public :: Check_nml => Check_nml
       procedure, public :: Initialization => Init_namelist
+      procedure, public :: Init_devel_block => Init_devel_block
       procedure, public :: Init_fire_block => Init_fire_block
       procedure, public :: Init_ideal_block => Init_ideal_block
       procedure, public :: Init_time_block => Init_time_block
@@ -204,6 +209,7 @@
       call Broadcast_real (this%fuelmc_c)
 
       call Broadcast_integer (this%ideal_opt)
+      call Broadcast_integer (this%devel_opt)
       call Broadcast_integer (this%fuel_opt)
       call Broadcast_integer (this%ros_opt)
       call Broadcast_integer (this%emis_opt)
@@ -300,6 +306,8 @@
       call Broadcast_integer (this%interval_atm)
       call Broadcast_integer (this%kde)
 
+        ! Devel block
+      call Broadcast_integer (this%check_isolated_neg_lfn)
     contains
 
       subroutine Broadcast_integer (val)
@@ -397,6 +405,36 @@
 
     end subroutine Init_atm_block
 
+    subroutine Init_devel_block (this, file_name)
+
+      implicit none
+
+      class (namelist_t), intent (in out) :: this
+      character (len = *), intent (in) :: file_name
+
+      integer :: check_isolated_neg_lfn
+      integer :: unit_nml, io_stat
+      character (len = :), allocatable :: msg
+
+      namelist /devel/ check_isolated_neg_lfn
+
+
+      check_isolated_neg_lfn = this%check_isolated_neg_lfn
+
+      open (newunit = unit_nml, file = trim (file_name), action = 'read', iostat = io_stat)
+      if (io_stat /= 0) then
+        msg = 'Problems opening namelist file ' // trim (file_name)
+        call Stop_simulation (msg)
+      end if
+
+      read (unit_nml, nml = devel, iostat = io_stat)
+      if (io_stat /= 0) call Stop_simulation ('Problems reading namelist devel block')
+      close (unit_nml)
+
+      this%check_isolated_neg_lfn = check_isolated_neg_lfn
+
+    end subroutine Init_devel_block
+
     subroutine Init_fire_block (this, file_name)
 
       implicit none
@@ -405,7 +443,7 @@
       character (len = *), intent (in) :: file_name
 
       integer :: fire_print_msg, fire_upwinding, fire_lsm_reinit_iter, fire_upwinding_reinit, fire_lsm_band_ngp, &
-          fast_dist_reinit_opt, fast_dist_reinit_freq, fire_viscosity_ngp, wind_vinterp_opt, hinterp_opt, ideal_opt, &
+          fast_dist_reinit_opt, fast_dist_reinit_freq, fire_viscosity_ngp, wind_vinterp_opt, hinterp_opt, ideal_opt, devel_opt, &
           fuel_opt, ros_opt, fmc_opt, emis_opt, fmoist_freq
       real :: fire_atm_feedback, fire_viscosity, fire_lsm_zcoupling_ref, fire_viscosity_bg, fire_viscosity_band, &
           fmoist_dt, fire_wind_height, frac_fburnt_to_smoke, fuelmc_g, fuelmc_g_live, fuelmc_c, reinit_pseudot_coef
@@ -428,7 +466,7 @@
           fast_dist_reinit_opt, fast_dist_reinit_freq, fire_lsm_reinit_iter, fire_upwinding_reinit, &
           fire_lsm_band_ngp, fire_lsm_zcoupling, fire_lsm_zcoupling_ref, fire_viscosity_bg, fire_viscosity_band, &
           fire_viscosity_ngp, fmoist_run, fmoist_freq, fmoist_dt, fire_wind_height, fire_is_real_perim, &
-          frac_fburnt_to_smoke, fuelmc_g, fuelmc_g_live, fuelmc_c, ideal_opt, fuel_opt, ros_opt, fmc_opt, emis_opt, &
+          frac_fburnt_to_smoke, fuelmc_g, fuelmc_g_live, fuelmc_c, ideal_opt, devel_opt, fuel_opt, ros_opt, fmc_opt, emis_opt, &
           wind_vinterp_opt, hinterp_opt, reinit_pseudot_coef, &
             ! Ignitions
           fire_num_ignitions, &
@@ -480,6 +518,7 @@
       fuelmc_c = this%fuelmc_c
 
       ideal_opt = this%ideal_opt
+      devel_opt = this%devel_opt
 
       fuel_opt = this%fuel_opt
       ros_opt = this%ros_opt
@@ -575,6 +614,7 @@
       this%fuelmc_c = fuelmc_c
 
       this%ideal_opt = ideal_opt
+      this%devel_opt = devel_opt
 
       this%fuel_opt = fuel_opt
       this%ros_opt = ros_opt
@@ -790,6 +830,7 @@
       call this%Init_fire_block (file_name = trim (file_name))
       call this%Init_atm_block (file_name = trim (file_name))
       if (this%ideal_opt > 0) call this%Init_ideal_block (file_name = trim (file_name))
+      if (this%devel_opt > 0) call this%Init_devel_block (file_name = trim (file_name))
 
       call this%Check_nml ()
 
