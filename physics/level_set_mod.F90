@@ -21,7 +21,7 @@
     use constants_mod, only : PI
 
 #ifdef DM_PARALLEL
-    use mpi_mod, only : Do_halo_exchange, Sum_across_mpi_tasks, Max_across_mpi_tasks
+    use mpi_mod, only : Do_halo_exchange, Sum_across_mpi_tasks, Max_across_mpi_tasks, Min_across_mpi_tasks
 #endif
 
     implicit none
@@ -427,7 +427,8 @@
         num_tiles, i_start, i_end, j_start, j_end, ts, dt, dx, dy, fire_upwinding, fire_viscosity, &
         fire_viscosity_bg, fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, &
         tbound, lfn_in, lfn_0, lfn_1, lfn_2, lfn_out, tign, ros, uf, vf, dzdxf, dzdyf, ros_model, cart_comm, &
-        ifps, ifpe, jfps, jfpe, grad_norm_ls)
+        ifps, ifpe, jfps, jfpe, grad_norm_ls, grad_norm_residual_sq_sum, grad_norm_residual_sq_sum_band, &
+        grad_norm_residual_rms_band)
 
       ! Purpose: Advance the level set function from time ts to time ts + dt
 
@@ -441,15 +442,16 @@
       real, dimension(ifms:ifme, jfms:jfme), intent (in out) :: lfn_in, tign, lfn_1, lfn_2, lfn_0
       real, dimension(ifms:ifme, jfms:jfme), intent (out) :: lfn_out, ros, grad_norm_ls
       real, intent (in) :: dx, dy, ts, dt
-      real, intent (out) :: tbound
+      real, intent (out) :: tbound, grad_norm_residual_sq_sum, grad_norm_residual_sq_sum_band, grad_norm_residual_rms_band
       class (ros_t), intent (in) :: ros_model
 
         ! to store tendency (rhs of the level set pde)
       real, dimension(ifms:ifme, jfms:jfme) :: tend
-      real :: tbound2, tbound3, tbound_thread, tbound_min
-      integer :: i, j, ij, ifts, ifte, jfts, jfte
+      real :: tbound2, tbound3, tbound_thread, tbound_min, grad_norm_residual_sq_sum_local, grad_norm_residual_sq_sum_band_local, &
+          np_band, gmin, gsum
+      integer :: i, j, ij, ifts, ifte, jfts, jfte, np_band_local
       character (len = 128) :: msg
-      logical, parameter :: DEBUG_LOCAL = .false.
+      logical, parameter :: DEBUG_LOCAL = .false., PRINT_ERRORS = .false.
 
 
       if (DEBUG_LOCAL) call Print_message ('Entering sub Prop_level_set...')
@@ -476,9 +478,15 @@
         ! Runge-Kutta step 1
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 1...')
 
-      tbound_min = huge(tbound_min)
+      tbound_min = huge (tbound_min)
+      grad_norm_residual_sq_sum = 0.0
+      grad_norm_residual_sq_sum_band = 0.0
+      np_band = 0.0
       !$OMP PARALLEL DO   &
-      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread) SHARED(tbound_min)
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread, grad_norm_residual_sq_sum_local, &
+      !$OMP grad_norm_residual_sq_sum_band_local, np_band_local) &
+      !$OMP REDUCTION(MIN: tbound_min) &
+      !$OMP REDUCTION(+: grad_norm_residual_sq_sum, grad_norm_residual_sq_sum_band, np_band)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -488,12 +496,44 @@
         call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
             ifms, ifme, jfms, jfme, ts, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_0, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, &
+            ros_model, grad_norm_ls, grad_norm_residual_sq_sum_local, grad_norm_residual_sq_sum_band_local, np_band_local)
 
         tbound_min = min(tbound_min, tbound_thread)
+        grad_norm_residual_sq_sum = grad_norm_residual_sq_sum + grad_norm_residual_sq_sum_local
+        grad_norm_residual_sq_sum_band = grad_norm_residual_sq_sum_band + grad_norm_residual_sq_sum_band_local
+        np_band = np_band + real (np_band_local)
       end do
       !$OMP END PARALLEL DO
+
+#ifdef DM_PARALLEL
+      call Sum_across_mpi_tasks (grad_norm_residual_sq_sum, cart_comm, gsum)
+      grad_norm_residual_sq_sum = gsum
+
+      call Sum_across_mpi_tasks (grad_norm_residual_sq_sum_band, cart_comm, gsum)
+      grad_norm_residual_sq_sum_band = gsum
+
+      call Sum_across_mpi_tasks (np_band, cart_comm, gsum)
+      np_band = gsum
+
+      call Min_across_mpi_tasks (tbound_min, cart_comm, gmin)
+      tbound_min = gmin
+#endif
+
       tbound = tbound_min
+      grad_norm_residual_sq_sum = sqrt (grad_norm_residual_sq_sum * dx * dy)
+      grad_norm_residual_sq_sum_band = sqrt (grad_norm_residual_sq_sum_band * dx * dy)
+      if (np_band > 0.0) then
+        grad_norm_residual_rms_band = sqrt (grad_norm_residual_sq_sum_band / np_band)
+      else
+        grad_norm_residual_rms_band = 0.0
+      end if
+
+      if (PRINT_ERRORS) then
+        write (msg, '(a, 3f12.6)') 'grad_norm_residual_sq_sum rk1, band, rms_band = ', grad_norm_residual_sq_sum, &
+            grad_norm_residual_sq_sum_band, grad_norm_residual_rms_band
+        call Print_message (msg)
+      end if
 
       !$OMP PARALLEL DO   &
       !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
@@ -519,9 +559,15 @@
         ! Runge-Kutta step 2
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 2...')
 
-      tbound_min = huge(tbound_min)
+      tbound_min = huge (tbound_min)
+      grad_norm_residual_sq_sum = 0.0
+      grad_norm_residual_sq_sum_band = 0.0
+      np_band = 0.0
       !$OMP PARALLEL DO   &
-      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread) SHARED(tbound_min)
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread, grad_norm_residual_sq_sum_local, &
+      !$OMP  grad_norm_residual_sq_sum_band_local, np_band_local) &
+      !$OMP REDUCTION(MIN: tbound_min) &
+      !$OMP REDUCTION(+: grad_norm_residual_sq_sum, grad_norm_residual_sq_sum_band, np_band)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -531,12 +577,44 @@
         call Calc_tend_ls (ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, &
             ifms,ifme,jfms,jfme, ts + dt, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_1, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, &
+            ros_model, grad_norm_ls, grad_norm_residual_sq_sum_local, grad_norm_residual_sq_sum_band_local, np_band_local)
 
-            tbound_min = min(tbound_min, tbound_thread)
+        tbound_min = min(tbound_min, tbound_thread)
+        grad_norm_residual_sq_sum = grad_norm_residual_sq_sum + grad_norm_residual_sq_sum_local
+        grad_norm_residual_sq_sum_band = grad_norm_residual_sq_sum_band + grad_norm_residual_sq_sum_band_local
+        np_band = np_band + real (np_band_local)
       end do
       !$OMP END PARALLEL DO
+
+#ifdef DM_PARALLEL
+      call Sum_across_mpi_tasks (grad_norm_residual_sq_sum, cart_comm, gsum)
+      grad_norm_residual_sq_sum = gsum
+
+      call Sum_across_mpi_tasks (grad_norm_residual_sq_sum_band, cart_comm, gsum)
+      grad_norm_residual_sq_sum_band = gsum
+
+      call Sum_across_mpi_tasks (np_band, cart_comm, gsum)
+      np_band = gsum
+
+      call Min_across_mpi_tasks (tbound_min, cart_comm, gmin)
+      tbound_min = gmin
+#endif
+
       tbound2 = tbound_min
+      grad_norm_residual_sq_sum = sqrt (grad_norm_residual_sq_sum * dx * dy)
+      grad_norm_residual_sq_sum_band = sqrt (grad_norm_residual_sq_sum_band * dx * dy)
+      if (np_band > 0.0) then
+        grad_norm_residual_rms_band = sqrt (grad_norm_residual_sq_sum_band / np_band)
+      else
+        grad_norm_residual_rms_band = 0.0
+      end if
+
+      if (PRINT_ERRORS) then
+        write (msg, '(a, 3f12.6)') 'grad_norm_residual_sq_sum rk2, band, rms_band = ', grad_norm_residual_sq_sum, &
+            grad_norm_residual_sq_sum_band, grad_norm_residual_rms_band
+        call Print_message (msg)
+      end if
 
       !$OMP PARALLEL DO   &
       !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
@@ -561,9 +639,15 @@
         ! Runge-Kutta step 3
       if (DEBUG_LOCAL) call Print_message ('call Calc_tend_ls 3...')
 
-      tbound_min = huge(tbound_min)
+      tbound_min = huge (tbound_min)
+      grad_norm_residual_sq_sum = 0.0
+      grad_norm_residual_sq_sum_band = 0.0
+      np_band = 0.0
       !$OMP PARALLEL DO   &
-      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread) SHARED(tbound_min)
+      !$OMP PRIVATE (ij, ifts, ifte, jfts, jfte, tbound_thread, grad_norm_residual_sq_sum_local, &
+      !$OMP grad_norm_residual_sq_sum_band_local, np_band_local) &
+      !$OMP REDUCTION(MIN: tbound_min) &
+      !$OMP REDUCTION(+: grad_norm_residual_sq_sum, grad_norm_residual_sq_sum_band, np_band)
       do ij = 1, num_tiles
         ifts = i_start(ij)
         ifte = i_end(ij)
@@ -573,12 +657,43 @@
         call Calc_tend_ls (ifds,ifde,jfds,jfde, ifts, ifte, jfts, jfte, &
             ifms, ifme, jfms, jfme, ts + dt, dt, dx, dy, fire_upwinding, &
             fire_viscosity, fire_viscosity_bg, fire_viscosity_band, &
-            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
+            fire_viscosity_ngp, fire_lsm_band_ngp, lfn_2, tbound_thread, tend, ros, uf, vf, dzdxf, dzdyf, &
+            ros_model, grad_norm_ls, grad_norm_residual_sq_sum_local, grad_norm_residual_sq_sum_band_local, np_band_local)
 
         tbound_min = min(tbound_min, tbound_thread)
+        grad_norm_residual_sq_sum = grad_norm_residual_sq_sum + grad_norm_residual_sq_sum_local
+        grad_norm_residual_sq_sum_band = grad_norm_residual_sq_sum_band + grad_norm_residual_sq_sum_band_local
+        np_band = np_band + real (np_band_local)
       end do
       !$OMP END PARALLEL DO
+
+#ifdef DM_PARALLEL
+      call Sum_across_mpi_tasks (grad_norm_residual_sq_sum, cart_comm, gsum)
+      grad_norm_residual_sq_sum = gsum
+
+      call Sum_across_mpi_tasks (grad_norm_residual_sq_sum_band, cart_comm, gsum)
+      grad_norm_residual_sq_sum_band = gsum
+
+      call Sum_across_mpi_tasks (np_band, cart_comm, gsum)
+      np_band = gsum
+
+      call Min_across_mpi_tasks (tbound_min, cart_comm, gmin)
+      tbound_min = gmin
+#endif
+
       tbound3 = tbound_min
+      grad_norm_residual_sq_sum = sqrt (grad_norm_residual_sq_sum * dx * dy)
+      grad_norm_residual_sq_sum_band = sqrt (grad_norm_residual_sq_sum_band * dx * dy)
+      if (np_band > 0.0) then
+        grad_norm_residual_rms_band = sqrt (grad_norm_residual_sq_sum_band / np_band)
+      else
+        grad_norm_residual_rms_band = 0.0
+      end if
+      if (PRINT_ERRORS) then
+        write (msg, '(a, 3f12.6)') 'grad_norm_residual_sq_sum rk3, band, rms_band = ', grad_norm_residual_sq_sum, &
+            grad_norm_residual_sq_sum_band, grad_norm_residual_rms_band
+        call Print_message (msg)
+      end if
 
       !$OMP PARALLEL DO   &
       !$OMP PRIVATE (ij, i, j, ifts, ifte, jfts, jfte)
@@ -972,7 +1087,8 @@
 
     subroutine Calc_tend_ls (ids, ide, jds, jde, its, ite, jts, jte, ifms, ifme, jfms, jfme, &
         t, dt, dx, dy, fire_upwinding, fire_viscosity, fire_viscosity_bg, &
-        fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, lfn, tbound, tend, ros, uf, vf, dzdxf, dzdyf, ros_model, grad_norm_ls)
+        fire_viscosity_band, fire_viscosity_ngp, fire_lsm_band_ngp, lfn, tbound, tend, ros, uf, vf, dzdxf, dzdyf, &
+        ros_model, grad_norm_ls, grad_norm_residual_sq_sum_local, grad_norm_residual_sq_sum_band_local, np_band_local)
 
       ! compute the right hand side of the level set equation
 
@@ -980,11 +1096,12 @@
 
       integer, intent (in) :: ifms, ifme, jfms, jfme, its, ite, jts, jte, ids, ide, jds, jde, &
           fire_upwinding,fire_viscosity_ngp, fire_lsm_band_ngp
+      integer, intent (out) :: np_band_local
       real, intent (in) :: fire_viscosity, fire_viscosity_bg, fire_viscosity_band, t, dt, dx, dy
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: uf, vf, dzdxf, dzdyf
       real, dimension(ifms:ifme, jfms:jfme), intent (in out) :: lfn
       real, dimension(ifms:ifme, jfms:jfme), intent (out) :: tend, ros, grad_norm_ls
-      real, intent (out) :: tbound
+      real, intent (out) :: tbound, grad_norm_residual_sq_sum_local, grad_norm_residual_sq_sum_band_local
       class (ros_t), intent (in) :: ros_model
 
       real, parameter :: EPS = epsilon (0.0), TOL = 100.0 * EPS
@@ -1010,6 +1127,9 @@
 
       if (DEBUG_LOCAL) call Print_message ('starting ij loops')
       tbound = 0.0
+      grad_norm_residual_sq_sum_local = 0.0
+      grad_norm_residual_sq_sum_band_local = 0.0
+      np_band_local = 0
       do j = jts, jte
         do i = its, ite
             ! one sided differences
@@ -1181,6 +1301,11 @@
           end if
 
           grad_norm_ls(i, j) = grad
+          grad_norm_residual_sq_sum_local = grad_norm_residual_sq_sum_local + (grad - 1.0) ** 2
+          if (abs(lfn(i, j)) < threshold_hlu) then
+            grad_norm_residual_sq_sum_band_local = grad_norm_residual_sq_sum_band_local + (grad - 1.0) ** 2
+            np_band_local = np_band_local + 1
+          end if
 
             ! Calc normal
           scale = sqrt (grad ** 2.0 + EPS)

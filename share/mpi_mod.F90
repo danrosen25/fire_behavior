@@ -7,7 +7,7 @@
     private
 
     public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange, Do_halo_exchange_with_corners, &
-        Max_across_mpi_tasks, Sum_across_mpi_tasks, Distribute_var2d
+        Max_across_mpi_tasks, Sum_across_mpi_tasks, Distribute_var2d, Min_across_mpi_tasks
 
   contains
 
@@ -537,6 +537,29 @@
 #endif
 
     end subroutine Max_across_mpi_tasks
+
+    subroutine Min_across_mpi_tasks (local_min, cart_comm, global_min)
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+
+      implicit none
+
+      real, intent (in) :: local_min
+      integer, intent (in) :: cart_comm
+      real, intent (out) :: global_min
+
+      integer :: ierr
+
+
+#ifdef DM_PARALLEL
+      call MPI_Allreduce (local_min, global_min, 1, MPI_REAL, MPI_MIN, cart_comm, ierr)
+#else
+      global_min = local_min
+#endif
+
+    end subroutine Min_across_mpi_tasks
 
     subroutine Sum_across_mpi_tasks (local_sum, cart_comm, global_sum)
 

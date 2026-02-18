@@ -100,6 +100,11 @@
       integer :: ny ! "number of latitudinal grid points" "1"
       real :: cen_lat, cen_lon
 
+        ! Performance stats
+      real :: grad_norm_residual_sq_sum
+      real :: grad_norm_residual_sq_sum_band
+      real :: grad_norm_residual_rms_band
+
         ! Output
       integer :: output_level
 
