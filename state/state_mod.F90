@@ -73,6 +73,8 @@
       real, dimension(:, :), allocatable :: nfuel_cat ! "fuel data"
       real, dimension(:, :), allocatable :: fuel_time ! "fuel"
       real, dimension(:, :), allocatable :: emis_smoke
+      real, dimension(:, :), allocatable :: grad_norm_ls ! Gracient norm of the level set function used to propagate level set function
+      real, dimension(:, :), allocatable :: grad_norm_reinit ! Gracient norm of the level set function used to reinitilize the level set function
 
       class (fuel_t), allocatable :: fuels
       class (ros_t), allocatable :: ros_param
@@ -97,6 +99,14 @@
       integer :: nx ! "number of longitudinal grid points" "1"
       integer :: ny ! "number of latitudinal grid points" "1"
       real :: cen_lat, cen_lon
+
+        ! Performance stats
+      real :: grad_norm_residual_sq_sum
+      real :: grad_norm_residual_sq_sum_band
+      real :: grad_norm_residual_rms_band
+
+        ! Output
+      integer :: output_level
 
         ! For MPI tasks
       integer :: cart_comm ! The MPI communicator with the domain decomposition
@@ -173,6 +183,8 @@
       allocate (this%dzdyf(ifms:ifme, jfms:jfme))
       allocate (this%nfuel_cat(ifms:ifme, jfms:jfme))
       allocate (this%emis_smoke(ifms:ifme, jfms:jfme))
+      allocate (this%grad_norm_ls(ifms:ifme, jfms:jfme))
+      allocate (this%grad_norm_reinit(ifms:ifme, jfms:jfme))
 
     end subroutine Allocate_vars
 
@@ -594,6 +606,9 @@
       if (DEBUG_LOCAL) call Print_message ('  Setting clock...')
       call this%Set_time_stamps (config_flags)
 
+        ! Output
+      this%output_level = config_flags%output_level
+
       if (DEBUG_LOCAL) call this%Print()
 
       if (DEBUG_LOCAL) call Print_message ('Leaving Init_domain...')
@@ -943,6 +958,14 @@
 
       call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
           this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+      if (this%output_level > 0) then
+          call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'grad_norm_ls', &
+              this%grad_norm_ls(this%ifps:this%ifpe, this%jfps:this%jfpe))
+
+          call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'grad_norm_reinit', &
+              this%grad_norm_reinit(this%ifps:this%ifpe, this%jfps:this%jfpe))
+      end if
 
       if (DEBUG_LOCAL) call Print_message ('Leaving Save_state...')
 

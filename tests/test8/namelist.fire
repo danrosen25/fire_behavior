@@ -39,5 +39,6 @@
  fmoist_run = .true.,   ! Run fuel moisture model
  fmoist_freq = 1,       ! Fuel moisture model updated every time step
  wind_vinterp_opt = 0
+ reinit_pseudot_coef = 0.0001
 /
 

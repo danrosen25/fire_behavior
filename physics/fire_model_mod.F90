@@ -29,7 +29,6 @@
 
       integer :: ij, ifds, ifde, jfds, jfde, ifts, ifte, jfts, jfte, ifms, ifme, jfms, jfme
       real :: tbound, time_start
-      integer, parameter :: CHECK_ISOLATED_NEG_LFN = 0
       logical, parameter :: DEBUG_LOCAL = .false.
 
 
@@ -53,7 +52,8 @@
           config_flags%fire_upwinding, config_flags%fire_viscosity, config_flags%fire_viscosity_bg, config_flags%fire_viscosity_band, &
           config_flags%fire_viscosity_ngp, config_flags%fire_lsm_band_ngp, tbound, grid%lfn, grid%lfn_0, grid%lfn_1, grid%lfn_2, &
           grid%lfn_out, grid%tign_g, grid%ros, grid%uf, grid%vf, grid%dzdxf, grid%dzdyf, grid%ros_param, grid%cart_comm, &
-          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe)
+          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, grid%grad_norm_ls, grid%grad_norm_residual_sq_sum, &
+          grid%grad_norm_residual_sq_sum_band, grid%grad_norm_residual_rms_band)
 
       if (DEBUG_LOCAL) call Print_message ('calling Stop_if_close_to_bdy...')
       !$OMP PARALLEL DO   &
@@ -113,7 +113,7 @@
           ifds, ifde, jfds, jfde, time_start, grid%dt, grid%dx, grid%dy, config_flags%fire_upwinding_reinit, &
           config_flags%fire_lsm_reinit_iter, config_flags%fire_lsm_band_ngp, grid%lfn, grid%lfn_2, grid%lfn_s0, &
           grid%lfn_s1, grid%lfn_s2, grid%lfn_s3, grid%lfn_out, grid%tign_g, grid%cart_comm, &
-          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe)
+          grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, config_flags%reinit_pseudot_coef, grid%grad_norm_reinit)
 
       if (DEBUG_LOCAL) call Print_message ('calling Copy_lfnout_to_lfn...')
       !$OMP PARALLEL DO   &
@@ -132,7 +132,7 @@
       call Do_halo_exchange_with_corners (grid%lfn, ifms, ifme, jfms, jfme, grid%ifps, grid%ifpe, grid%jfps, grid%jfpe, N_POINTS_IN_HALO, grid%cart_comm)
 #endif
 
-      if (CHECK_ISOLATED_NEG_LFN == 1) call Check_isolated_negative_lfn (grid)
+      if (config_flags%check_isolated_neg_lfn == 1) call Check_isolated_negative_lfn (grid)
  
       if (DEBUG_LOCAL) call Print_message ('calling Ignite_prescribed_fires...')
       !$OMP PARALLEL DO   &
