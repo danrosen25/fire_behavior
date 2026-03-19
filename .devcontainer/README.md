@@ -16,7 +16,7 @@ Container directories are named as `<os>-<compiler>-<mpi>` so additional variant
 
 | Variant | Summary |
 |---------|---------|
-| [ubuntu-25.10_gcc-14_mpich](ubuntu-25.10_gcc-14_mpich/) | GCC-14 and MPICH development environment with Spack-managed CFBM dependencies |
+| [ubuntu-25.10_gcc-15_mpich](ubuntu-25.10_gcc-15_mpich/) | GCC-15 and MPICH development environment with Spack-managed CFBM dependencies |
 
 ## VS Code Usage
 

@@ -1,20 +1,22 @@
-# Community Fire Behavior Model Dev Container: ubuntu-25.10_gcc-14_mpich
+# Community Fire Behavior Model Dev Container: ubuntu-25.10_gcc-15_mpich
 
-This image provides a ready-to-build Community Fire Behavior Model (CFBM) development environment with GCC-14, MPICH, and scientific libraries installed through Spack.
+This image provides a ready-to-build Community Fire Behavior Model (CFBM) development environment with GCC-15, MPICH, and scientific libraries installed through Spack.
 
 For general Community Fire Behavior Model project information, see the [CFBM Documentation](https://ral.ucar.edu/model/community-fire-behavior-model).
 
 ## Installed Toolchain
 
-The Dockerfile currently builds from `ubuntu:rolling` and installs:
+The Dockerfile builds from `ubuntu:25.10` with the following components:
 
-- GCC, G++, and GFortran @14.3
-- Spack @1.1
-- MPICH @4.3
-- NetCDF-C @4.9
-- NetCDF-Fortran @4.6
-- ParallelIO @2.6
-- ESMF @8.8
+- GCC, G++, and GFortran 15.2
+- Spack 1.1
+- MPICH (ubuntu package, detected dynamically)
+- NetCDF-C (ubuntu package, detected dynamically)
+- NetCDF-Fortran (ubuntu package, detected dynamically)
+- Python 3 (ubuntu package, detected dynamically)
+- py-pyyaml (ubuntu package, detected dynamically)
+- ParallelIO 2.6
+- ESMF 8.8
 
 ## Environment
 
@@ -34,16 +36,16 @@ Start the container with `bash -l` to load the Spack-managed environment automat
 
 ### Build the image
 
-From `.devcontainer/ubuntu-25.10_gcc-14_mpich/`:
+From `.devcontainer/ubuntu-25.10_gcc-15_mpich/`:
 
 ```bash
-docker build -t cfbmdev_ubuntu-25.10_gcc-14_mpich .
+docker build -t cfbmdev_ubuntu-25.10_gcc-15_mpich .
 ```
 
 ### Run an interactive shell
 
 ```bash
-docker run --rm -it cfbmdev_ubuntu-25.10_gcc-14_mpich bash -l
+docker run --rm -it cfbmdev_ubuntu-25.10_gcc-15_mpich bash -l
 ```
 
 ### Run an interactive shell with mounted local fire_behavior folder
@@ -54,7 +56,7 @@ From the repository root:
 docker run --rm -it \
 	-v "$PWD:/home/cfbm-dev/fire_behavior" \
 	-w /home/cfbm-dev/fire_behavior \
-	cfbmdev_ubuntu-25.10_gcc-14_mpich \
+	cfbmdev_ubuntu-25.10_gcc-15_mpich \
 	bash -l
 ```
 
