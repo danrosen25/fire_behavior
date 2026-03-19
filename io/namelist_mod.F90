@@ -316,13 +316,14 @@
 
         implicit none
 
-        integer, intent(in) :: val
+        integer, intent(in out) :: val
 
         integer :: ierr
         integer :: sendbuf(1)
 
         sendbuf(1) = val
         call Mpi_bcast(sendbuf, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        val = sendbuf(1)
 
         if (ierr /= MPI_SUCCESS) &
             call Stop_simulation ('Error broadcasting integer value')
@@ -333,13 +334,14 @@
 
         implicit none
 
-        logical, intent(in) :: val
+        logical, intent(in out) :: val
 
         integer :: ierr
         logical :: sendbuf(1)
 
         sendbuf(1) = val
         call Mpi_bcast (sendbuf, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+        val = sendbuf(1)
 
         if (ierr /= MPI_SUCCESS) &
             call Stop_simulation ('Error broadcasting logical value')
@@ -350,13 +352,14 @@
 
         implicit none
 
-        real, intent(in) :: val
+        real, intent(in out) :: val
 
         integer :: ierr
         real    :: sendbuf(1)
 
         sendbuf(1) = val
         call Mpi_bcast (sendbuf, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        val = sendbuf(1)
 
         if (ierr /= MPI_SUCCESS) &
             call Stop_simulation ('Error broadcasting real value')
