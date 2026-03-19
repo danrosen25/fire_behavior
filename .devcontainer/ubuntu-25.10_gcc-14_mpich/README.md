@@ -1,6 +1,6 @@
-# Community Fire Behavior Model Dev Container: ubuntu@25.10-gcc@14.3-mpich@4.3
+# Community Fire Behavior Model Dev Container: ubuntu-25.10_gcc-14_mpich
 
-This image provides a ready-to-build Community Fire Behavior Model (CFBM) development environment with GCC 14, MPICH 4.3, and scientific libraries installed through Spack.
+This image provides a ready-to-build Community Fire Behavior Model (CFBM) development environment with GCC-14, MPICH, and scientific libraries installed through Spack.
 
 For general Community Fire Behavior Model project information, see the [CFBM Documentation](https://ral.ucar.edu/model/community-fire-behavior-model).
 
@@ -34,16 +34,16 @@ Start the container with `bash -l` to load the Spack-managed environment automat
 
 ### Build the image
 
-From `.devcontainer/ubuntu@25.10-gcc@14.3-mpich@4.3/docker/`:
+From `.devcontainer/ubuntu-25.10_gcc-14_mpich/`:
 
 ```bash
-docker build -t cfbmdev-ubuntu-25.10-gcc-14.3-mpich-4.3 .
+docker build -t cfbmdev_ubuntu-25.10_gcc-14_mpich .
 ```
 
 ### Run an interactive shell
 
 ```bash
-docker run --rm -it cfbmdev-ubuntu-25.10-gcc-14.3-mpich-4.3 bash -l
+docker run --rm -it cfbmdev_ubuntu-25.10_gcc-14_mpich bash -l
 ```
 
 ### Run an interactive shell with mounted local fire_behavior folder
@@ -54,7 +54,7 @@ From the repository root:
 docker run --rm -it \
 	-v "$PWD:/home/cfbm-dev/fire_behavior" \
 	-w /home/cfbm-dev/fire_behavior \
-	cfbmdev-ubuntu-25.10-gcc-14.3-mpich-4.3 \
+	cfbmdev_ubuntu-25.10_gcc-14_mpich \
 	bash -l
 ```
 

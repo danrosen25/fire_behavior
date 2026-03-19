@@ -7,8 +7,8 @@ This directory contains the Community Fire Behavior Model (CFBM) development con
 Dev containers provide a reproducible environment with the compilers, MPI libraries, and scientific libraries required to build the Community Fire Behavior Model. Each container variant lives in its own directory and includes:
 
 - `devcontainer.json` for VS Code Dev Containers
-- `docker/` for the Dockerfile and supporting scripts
-- a README with variant-specific usage notes
+- `Dockerfile` and supporting container files
+- `README` with variant-specific usage notes
 
 ## Available Dev Containers
 
@@ -16,7 +16,7 @@ Container directories are named as `<os>-<compiler>-<mpi>` so additional variant
 
 | Variant | Summary |
 |---------|---------|
-| [ubuntu@25.10-gcc@14.3-mpich@4.3](ubuntu@25.10-gcc@14.3-mpich@4.3/) | GCC 14 and MPICH 4.3 development environment with Spack-managed CFBM dependencies |
+| [ubuntu-25.10_gcc-14_mpich](ubuntu-25.10_gcc-14_mpich/) | GCC-14 and MPICH development environment with Spack-managed CFBM dependencies |
 
 ## VS Code Usage
 
