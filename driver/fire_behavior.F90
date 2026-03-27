@@ -12,7 +12,7 @@
 
     implicit none
 
-    integer :: ierr, rank
+    integer :: ierr, rank, mpi_comm_cfbm
     type (state_fire_t) :: grid
     type (wrfdata_t) :: atm_state
     type (namelist_t) :: config_flags
@@ -27,11 +27,17 @@
       write (ERROR_UNIT, *) 'ERROR: mpi_init failed'
       stop
     end if
+
+    call MPI_Comm_dup (MPI_COMM_WORLD, mpi_comm_cfbm, ierr)
+    if (ierr /= MPI_SUCCESS) then
+      write (ERROR_UNIT, *) 'ERROR: mpi_comm_dup failed'
+      stop
+    end if
 #endif
 
       ! Read namelist
 #ifdef DM_PARALLEL
-    call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+    call Mpi_comm_rank (mpi_comm_cfbm, rank, ierr)
     if (ierr /= MPI_SUCCESS) then
       write (ERROR_UNIT, *) 'ERROR: mpi_comm_rank failed'
       stop
@@ -44,10 +50,13 @@
     if (rank == 0) call config_flags%Initialization (file_name = 'namelist.fire')
 
 #ifdef DM_PARALLEL
-    call config_flags%Broadcast_nml ()
+    call config_flags%Broadcast_nml (mpi_comm_cfbm)
 #endif
 
     if (DEBUG_LOCAL) write (OUTPUT_UNIT, *) '  Initialization fire state...'
+#ifdef DM_PARALLEL
+    call grid%Set_mpi_comm_cfbm (mpi_comm_cfbm)
+#endif
     select case (config_flags%ideal_opt)
       case (0)
         call Init_atm_state (atm_state, config_flags)

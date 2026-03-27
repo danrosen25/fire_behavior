@@ -52,6 +52,7 @@ module fire_behavior_nuopc
   logical :: imp_rainacc = .FALSE.
 
   logical, parameter :: DEBUG_ALL = .false.
+  integer :: mpi_comm_cfbm
 
   contains
 
@@ -114,28 +115,30 @@ module fire_behavior_nuopc
     integer :: rank, ierr
     logical, parameter :: DEBUG_LOCAL = .false.
 
-!    integer :: MPI_COMM_CFBM ! Place this in a point which is accesible by all the mpi calls
-!    type(ESMF_VM) :: vm
+    type(ESMF_VM) :: vm
+
 
     if (DEBUG_LOCAL .or. DEBUG_ALL) call Print_message ('Entering Advertise fire...')
 
     rc = ESMF_SUCCESS
 
-    ! query for importState and exportState
+      ! query for importState and exportState
     call NUOPC_ModelGet(model, importState=importState, &
-      exportState=exportState, rc=rc)
+        exportState=exportState, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+        line=__LINE__, file=__FILE__)) return  ! bail out
 
-! This will generate the CFBM MPI communicator
-! call ESMF_GridCompGet (model, vm = vm)
-! call ESMF_VMGet (vm, mpiCommunicator = MPI_COMM_CFBM)
+    call ESMF_GridCompGet (model, vm = vm, rc = rc)
+    if (ESMF_LogFoundError (rcToCheck = rc, msg = ESMF_LOGERR_PASSTHRU, &
+        line = __LINE__, file = __FILE__)) return
+
+    call ESMF_VMGet (vm, mpiCommunicator = mpi_comm_cfbm, rc = rc)
+    if (ESMF_LogFoundError (rcToCheck = rc, msg = ESMF_LOGERR_PASSTHRU, &
+        line = __LINE__, file = __FILE__)) return
 
       ! Read namelist
 #ifdef DM_PARALLEL
-    call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+    call Mpi_comm_rank (mpi_comm_cfbm, rank, ierr)
     if (ierr /= MPI_SUCCESS) call Stop_simulation ('ERROR: mpi_comm_rank failed')
 #else
     rank = 0
@@ -144,7 +147,11 @@ module fire_behavior_nuopc
     if (rank == 0) call config_flags%Initialization (file_name = 'namelist.fire')
 
 #ifdef DM_PARALLEL
-    call config_flags%Broadcast_nml ()
+    call config_flags%Broadcast_nml (mpi_comm_cfbm)
+#endif
+
+#ifdef DM_PARALLEL
+    call grid%Set_mpi_comm_cfbm (mpi_comm_cfbm)
 #endif
 
     call Init_fire_state (grid, config_flags)
@@ -359,7 +366,7 @@ module fire_behavior_nuopc
     allocate (recvbuf(4 * petCount))
     sendbuf = (/ grid%ifps, grid%ifpe, grid%jfps, grid%jfpe /)
     call MPI_Allgather(sendbuf, 4, MPI_INTEGER, &
-        recvbuf, 4, MPI_INTEGER, MPI_COMM_WORLD, ierr)
+        recvbuf, 4, MPI_INTEGER, mpi_comm_cfbm, ierr)
 
     allocate (deBlockList(2, 2, petCount))
 

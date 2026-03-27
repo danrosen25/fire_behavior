@@ -7,7 +7,7 @@
     private
 
     public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange, Do_halo_exchange_with_corners, &
-        Max_across_mpi_tasks, Sum_across_mpi_tasks, Distribute_var2d, Min_across_mpi_tasks
+        Max_across_mpi_tasks, Sum_across_mpi_tasks, Distribute_var2d, Min_across_mpi_tasks, Convert_mpi_comm_to_f08
 
   contains
 
@@ -76,6 +76,22 @@
       end do
 
     end subroutine Calc_tasks_in_x_and_y
+
+    subroutine Convert_mpi_comm_to_f08 (comm_old, comm_new)
+
+#ifdef DM_PARALLEL
+      use mpi_f08
+
+      implicit none
+
+      integer, intent (in) :: comm_old
+      type(MPI_Comm), intent (out) :: comm_new
+
+
+      comm_new = transfer (comm_old, comm_new)
+#endif
+
+    end subroutine Convert_mpi_comm_to_f08
 
     subroutine Distribute_var2d (local_field, ips, ipe, jps, jpe, comm)
 
@@ -462,7 +478,7 @@
 
     end subroutine Do_halo_exchange_with_corners
 
-    subroutine Gather_var2d (nx, ny, ifps, ifpe, jfps, jfpe, var2d_local, var2d_global)
+    subroutine Gather_var2d (cfbm_comm, nx, ny, ifps, ifpe, jfps, jfpe, var2d_local, var2d_global)
 
 #ifdef DM_PARALLEL
       use mpi_f08
@@ -470,7 +486,7 @@
 
       implicit none
 
-      integer, intent (in) :: nx, ny, ifps, ifpe, jfps, jfpe
+      integer, intent (in) :: cfbm_comm, nx, ny, ifps, ifpe, jfps, jfpe
       real, dimension(ifps:ifpe, jfps:jfpe), intent (in) :: var2d_local
       real, dimension(nx, ny), intent (out) :: var2d_global
 
@@ -478,18 +494,23 @@
       integer :: rank, ierr, ntasks, src, i_start, j_start, nx_local, ny_local, nxl, nyl
 
       integer, dimension(4) :: metadata
+#ifdef DM_PARALLEL
+      type(MPI_Comm) :: cfbm_comm_f08
+#endif
 
 
 #ifdef DM_PARALLEL
-      call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
-      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+      call Convert_mpi_comm_to_f08 (cfbm_comm, cfbm_comm_f08)
+
+      call Mpi_comm_size (cfbm_comm_f08, ntasks, ierr)
+      call Mpi_comm_rank (cfbm_comm_f08, rank, ierr)
 
       nx_local = ifpe - ifps + 1
       ny_local = jfpe - jfps + 1
       if (rank /= 0) then
         metadata = [ifps, jfps, nx_local, ny_local]
-        call Mpi_Send (metadata, 4, MPI_INTEGER, 0, 200, MPI_COMM_WORLD, ierr)
-        call Mpi_Send (var2d_local, nx_local * ny_local, MPI_REAL, 0, 100, MPI_COMM_WORLD, ierr)
+        call Mpi_Send (metadata, 4, MPI_INTEGER, 0, 200, cfbm_comm_f08, ierr)
+        call Mpi_Send (var2d_local, nx_local * ny_local, MPI_REAL, 0, 100, cfbm_comm_f08, ierr)
       else
           ! Rank 0 places its own data
         var2d_global(ifps:ifpe, jfps:jfpe) = var2d_local
@@ -497,13 +518,13 @@
           ! Receive from others
         do src = 1, ntasks - 1
             ! Receive metadata
-          call Mpi_Recv (metadata, 4, MPI_INTEGER, src, 200, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+          call Mpi_Recv (metadata, 4, MPI_INTEGER, src, 200, cfbm_comm_f08, MPI_STATUS_IGNORE, ierr)
           i_start = metadata(1)
           j_start = metadata(2)
           nxl = metadata(3)
           nyl = metadata(4)
           allocate (buf(nxl, nyl))
-          call Mpi_Recv (buf, nxl * nyl, MPI_REAL, src, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+          call Mpi_Recv (buf, nxl * nyl, MPI_REAL, src, 100, cfbm_comm_f08, MPI_STATUS_IGNORE, ierr)
 
             ! Place in global array
           var2d_global(i_start:i_start + nxl - 1, j_start:j_start + nyl - 1) = buf

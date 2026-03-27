@@ -10,6 +10,7 @@
     use fmc_mod, only : FMC_WRFFIRE
     use emis_mod, only : EMIS_WRFFIRE
     use stderrout_mod, only : Stop_simulation, Print_message
+    use mpi_mod, only : Convert_mpi_comm_to_f08
 
     implicit none
 
@@ -173,14 +174,17 @@
 
   contains
 
-    subroutine Broadcast_nml (this)
+    subroutine Broadcast_nml (this, mpi_comm_cfbm)
 
       implicit none
 
       class (namelist_t), intent (in out) :: this
-
-
+      integer, intent (in) :: mpi_comm_cfbm
 #ifdef DM_PARALLEL
+      type(MPI_Comm) :: mpi_comm_cfbm_f08
+
+
+      call Convert_mpi_comm_to_f08 (mpi_comm_cfbm, mpi_comm_cfbm_f08)
 
         ! Fire block
       call Broadcast_integer (this%fire_print_msg)
@@ -322,7 +326,7 @@
         integer :: sendbuf(1)
 
         sendbuf(1) = val
-        call Mpi_bcast(sendbuf, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call Mpi_bcast(sendbuf, 1, MPI_INTEGER, 0, mpi_comm_cfbm_f08, ierr)
         val = sendbuf(1)
 
         if (ierr /= MPI_SUCCESS) &
@@ -340,7 +344,7 @@
         logical :: sendbuf(1)
 
         sendbuf(1) = val
-        call Mpi_bcast (sendbuf, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+        call Mpi_bcast (sendbuf, 1, MPI_LOGICAL, 0, mpi_comm_cfbm_f08, ierr)
         val = sendbuf(1)
 
         if (ierr /= MPI_SUCCESS) &
@@ -358,7 +362,7 @@
         real    :: sendbuf(1)
 
         sendbuf(1) = val
-        call Mpi_bcast (sendbuf, 1, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+        call Mpi_bcast (sendbuf, 1, MPI_REAL, 0, mpi_comm_cfbm_f08, ierr)
         val = sendbuf(1)
 
         if (ierr /= MPI_SUCCESS) &
