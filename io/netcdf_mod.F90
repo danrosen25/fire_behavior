@@ -107,14 +107,14 @@
 
     end subroutine Add_netcdf_var_real32_2d
 
-    subroutine Add_netcdf_var_real32_2d_mpi (file_name, nx, ny, ifps, ifpe, jfps, jfpe, var_name, var2d_local)
+    subroutine Add_netcdf_var_real32_2d_mpi (file_name, cfbm_comm, nx, ny, ifps, ifpe, jfps, jfpe, var_name, var2d_local)
 
 #ifdef DM_PARALLEL
       use mpi
 #endif
       implicit none
 
-      integer, intent (in) :: nx, ny, ifps, ifpe, jfps, jfpe
+      integer, intent (in) :: cfbm_comm, nx, ny, ifps, ifpe, jfps, jfpe
       character (len = *), intent (in) :: file_name, var_name
       real, dimension(ifps:ifpe, jfps:jfpe), intent (in) :: var2d_local
 
@@ -131,10 +131,10 @@
       if (DEBUG_LOCAL) call Print_message ('dim Y name = ' // trim (NAME_DIM_Y))
 
 #ifdef DM_PARALLEL
-      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+      call Mpi_comm_rank (cfbm_comm, rank, ierr)
       if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
 
-      call Gather_var2d (nx, ny, ifps, ifpe, jfps, jfpe, var2d_local(ifps:ifpe, jfps:jfpe), var2d)
+      call Gather_var2d (cfbm_comm, nx, ny, ifps, ifpe, jfps, jfpe, var2d_local(ifps:ifpe, jfps:jfpe), var2d)
 
       if (rank == 0) then
         call Add_netcdf_var (file_name, [NAME_DIM_X, NAME_DIM_Y], var_name, var2d(1:nx, 1:ny))

@@ -109,6 +109,8 @@
       integer :: output_level
 
         ! For MPI tasks
+      integer :: cfbm_comm ! The MPI communicator before the domain decomposition
+      logical :: is_cfbm_comm_set = .false.
       integer :: cart_comm ! The MPI communicator with the domain decomposition
       integer :: ntasks ! Number of MPI tasks
       integer :: px, py ! Number of MPI tasks in X and Y, respectively
@@ -129,6 +131,7 @@
       procedure, public :: Print_tiles => Print_tiles
       procedure, public :: Save_state => Save_state
       procedure, public :: Set_vars_to_default => Set_vars_to_default
+      procedure, public :: Set_mpi_comm_cfbm => Set_mpi_comm_cfbm
       procedure, public :: Set_time_stamps => Set_time_stamps
     end type state_fire_t
 
@@ -353,7 +356,9 @@
 
 #ifdef DM_PARALLEL
 
-            call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
+            if (.not. this%is_cfbm_comm_set) call Stop_simulation ('The MPI CFBM communicator has not been set')
+
+            call Mpi_comm_size (this%cfbm_comm, ntasks, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
             this%ntasks = ntasks
 
@@ -363,7 +368,7 @@
             write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', this%px, this%py
             call Print_message (msg)
 
-            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
+            call Mpi_cart_create (this%cfbm_comm, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
             this%cart_comm = cart_comm
 
@@ -407,7 +412,7 @@
             jde0 = config_flags%ny
 
 #ifdef DM_PARALLEL
-            call Mpi_comm_size (MPI_COMM_WORLD, ntasks, ierr)
+            call Mpi_comm_size (this%cfbm_comm, ntasks, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks')
             this%ntasks = ntasks
 
@@ -417,7 +422,7 @@
             write (msg, '(a25, 2(1x, i5))') 'MPI TASKS in x and y =', this%px, this%py
             call Print_message (msg)
 
-            call Mpi_cart_create (MPI_COMM_WORLD, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
+            call Mpi_cart_create (this%cfbm_comm, N_DIMS, [this%px, this%py], PERIODS, REORDER, cart_comm, ierr)
             if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_cart_create')
             this%cart_comm = cart_comm
 
@@ -886,7 +891,7 @@
       if (DEBUG_LOCAL) call Print_message ('Entering Save_state...')
 
 #ifdef DM_PARALLEL
-      call Mpi_comm_rank (MPI_COMM_WORLD, rank, ierr)
+      call Mpi_comm_rank (this%cfbm_comm, rank, ierr)
       if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems with Mpi_comm_rank ')
 #else
       rank = 0
@@ -902,74 +907,87 @@
       end if
 
       if (DEBUG_LOCAL) call Print_message ('  Saving variables...')
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lats', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lats', &
           this%lats(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lons', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lons', &
           this%lons(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnhfx', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnhfx', &
           this%fgrnhfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnqfx', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fgrnqfx', &
           this%fgrnqfx(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_area', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_area', &
           this%fire_area(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac_burnt_dt', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac_burnt_dt', &
           this%fuel_frac_burnt_dt(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fuel_frac', &
           this%fuel_frac(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'emis_smoke', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'emis_smoke', &
           this%emis_smoke(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_t2', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_t2', &
           this%fire_t2(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_q2', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_q2', &
           this%fire_q2(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_psfc', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_psfc', &
           this%fire_psfc(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_rain', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fire_rain', &
           this%fire_rain(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fz0', &
           this%fz0(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fmc_g', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'fmc_g', &
           this%fmc_g(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'uf', &
           this%uf(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'vf', &
           this%vf(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'zsf', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'zsf', &
           this%zsf(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lfn', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'lfn', &
           this%lfn(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-      call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
+      call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'nfuel_cat', &
           this%nfuel_cat(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
       if (this%output_level > 0) then
-          call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'grad_norm_ls', &
+          call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'grad_norm_ls', &
               this%grad_norm_ls(this%ifps:this%ifpe, this%jfps:this%jfpe))
 
-          call Add_netcdf_var_mpi (file_output, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'grad_norm_reinit', &
+          call Add_netcdf_var_mpi (file_output, this%cfbm_comm, this%nx, this%ny, this%ifps, this%ifpe, this%jfps, this%jfpe, 'grad_norm_reinit', &
               this%grad_norm_reinit(this%ifps:this%ifpe, this%jfps:this%jfpe))
       end if
 
       if (DEBUG_LOCAL) call Print_message ('Leaving Save_state...')
 
     end subroutine Save_state
+
+    subroutine Set_mpi_comm_cfbm (this, mpi_comm_cfbm)
+
+      implicit none
+
+      class (state_fire_t), intent (in out) :: this
+      integer, intent (in) :: mpi_comm_cfbm
+
+
+      this%cfbm_comm = mpi_comm_cfbm
+      this%is_cfbm_comm_set = .true.
+
+    end subroutine Set_mpi_comm_cfbm
 
     subroutine Set_time_stamps (this, config_flags)
 
