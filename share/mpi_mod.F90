@@ -81,15 +81,19 @@
 
 #ifdef DM_PARALLEL
       use mpi_f08
+#endif
 
       implicit none
 
       integer, intent (in) :: comm_old
+#ifdef DM_PARALLEL
       type(MPI_Comm), intent (out) :: comm_new
+#else
+      integer, intent (out) :: comm_new
+#endif
 
 
       comm_new = transfer (comm_old, comm_new)
-#endif
 
     end subroutine Convert_mpi_comm_to_f08
 
