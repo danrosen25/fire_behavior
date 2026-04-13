@@ -149,8 +149,11 @@
         kfds, kfde, kfms, kfme, kfps, kfpe, &
         kfts, kfte, ide, jde, dx, dy, sr_x, sr_y, &
         map_proj, cen_lat, cen_lon, truelat1, truelat2, stand_lon, &
-        nfuel_cat, zsf, dzdxf, dzdyf)
+        nfuel_cat, zsf, dzdxf, dzdyf, communicator)
 
+#ifdef DM_PARALLEL
+    use mpi
+#endif
       implicit none
 
       type (state_fire_t), intent (in out) :: state
@@ -158,10 +161,18 @@
       integer, intent (in) :: ifds, ifde, ifms, ifme, ifps, ifpe, &
                               jfds, jfde, jfms, jfme, jfps, jfpe, &
                               kfds, kfde, kfms, kfme, kfps, kfpe, &
-                              kfts, kfte, map_proj, sr_x, sr_y, ide, jde
+                              kfts, kfte, map_proj, sr_x, sr_y, ide, jde, communicator
       real :: dx, dy, cen_lat, cen_lon, truelat1, truelat2, stand_lon
       real, dimension(ifms:ifme, jfms:jfme), intent (in) :: nfuel_cat, zsf, dzdxf, dzdyf
 
+      logical, parameter :: DEBUG_LOCAL = .false.
+
+
+      if (DEBUG_LOCAL) call Print_message ('  Entering subroutine Init_fire_state_within_wrf...')
+
+#ifdef DM_PARALLEL
+      call state%Set_mpi_comm_cfbm (communicator)
+#endif
 
       call state%Initialization (config_flags, &
           ifds = ifds, ifde = ifde, ifms = ifms, ifme = ifme, ifps = ifps, ifpe = ifpe, &
@@ -173,6 +184,8 @@
           nfuel_cat = nfuel_cat, zsf = zsf, dzdxf = dzdxf, dzdyf = dzdyf)
 
       call Init_fire_components (state, config_flags)
+
+      if (DEBUG_LOCAL) call Print_message ('  Leaving subroutine Init_fire_state_within_wrf...')
 
     end subroutine Init_fire_state_within_wrf
 

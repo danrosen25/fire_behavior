@@ -493,6 +493,14 @@
 
           call this%Init_tiles_in_wrf (config_flags, sr_x, sr_y)
 
+#ifdef DM_PARALLEL
+!          call Mpi_comm_size (this%cfbm_comm, ntasks, ierr)
+!          if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks in WRF')
+!          this%ntasks = ntasks
+
+          this%cart_comm = this%cfbm_comm
+#endif
+
         case default
 
           call Stop_simulation ('Not ready to complete fire state initialization 1')
