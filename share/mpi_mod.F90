@@ -7,7 +7,14 @@
     private
 
     public :: Calc_tasks_in_x_and_y, Calc_patch_dims, Gather_var2d, Do_halo_exchange, Do_halo_exchange_with_corners, &
-        Max_across_mpi_tasks, Sum_across_mpi_tasks, Distribute_var2d, Min_across_mpi_tasks, Convert_mpi_comm_to_f08
+        Max_across_mpi_tasks, Sum_across_mpi_tasks, Distribute_var2d, Min_across_mpi_tasks, Convert_mpi_comm_to_f08, &
+        Print_cart_info, topology_dim_order
+
+    ! --- Topology Ordering Flag ---
+    ! 0 = Default (Fortran order: X is Dim 0, Y is Dim 1)
+    ! 1 = External (C/C++ order: Y is Dim 0, X is Dim 1)
+    integer :: topology_dim_order = 0
+    ! ------------------------------
 
   contains
 
@@ -218,8 +225,11 @@
       integer :: rank, i, j, k
       integer, dimension(2) :: coords
 
+      ! New variables to handle the topology mapping
+      integer :: dim_x, dim_y
 
 #ifdef DM_PARALLEL
+
       call MPI_Comm_rank(cart_comm, rank, ierr)
       call MPI_Cart_coords(cart_comm, rank, 2, coords, ierr)
 
@@ -228,9 +238,23 @@
 
       tag_base = 1000
 
-        ! Get neighbor ranks in Cartesian topology
-      call MPI_Cart_shift(cart_comm, 0, 1, nbr_left, nbr_right, ierr)
-      call MPI_Cart_shift(cart_comm, 1, 1, nbr_down, nbr_up, ierr)
+      ! ---------------------------------------------------------
+      ! ADAPT DIMENSIONS BASED ON MODULE FLAG
+      ! ---------------------------------------------------------
+      if (topology_dim_order == 0) then
+          ! Default internal behavior [X, Y]
+          dim_x = 0
+          dim_y = 1
+      else
+          ! External framework behavior [Y, X]
+          dim_x = 1
+          dim_y = 0
+      end if
+
+      ! Get neighbor ranks in Cartesian topology using the mapped dimensions
+      call MPI_Cart_shift(cart_comm, dim_x, 1, nbr_left, nbr_right, ierr)
+      call MPI_Cart_shift(cart_comm, dim_y, 1, nbr_down, nbr_up, ierr)
+      ! ---------------------------------------------------------
 
         ! Allocate buffers
       allocate (sendbuf_right(ny * nghost), recvbuf_left(ny * nghost))
@@ -282,7 +306,7 @@
       call MPI_Irecv(recvbuf_up, nx * nghost, MPI_REAL, nbr_up, tag_base + 3, cart_comm, reqs(7), ierr)
       call MPI_Isend(sendbuf_down, nx * nghost, MPI_REAL, nbr_down, tag_base + 3, cart_comm, reqs(8), ierr)
 
-       ! Wait for all communications
+      ! Wait for all communications
       call MPI_Waitall(8, reqs, MPI_STATUSES_IGNORE, ierr)
 
         ! Unpack ghost zones
@@ -358,6 +382,8 @@
       real, dimension(:), allocatable :: sendbuf_right, recvbuf_left, sendbuf_left, recvbuf_right
       real, dimension(:), allocatable :: sendbuf_up, recvbuf_down, sendbuf_down, recvbuf_up
 
+      ! New variables to handle the topology mapping
+      integer :: dim_x, dim_y
 
 #ifdef DM_PARALLEL
       call MPI_Comm_rank(cart_comm, rank, ierr)
@@ -367,9 +393,23 @@
       ny = jpe - jps + 1
       tag_base = 1000
 
-        ! Neighbor ranks
-      call MPI_Cart_shift (cart_comm, 0, 1, nbr_left, nbr_right, ierr)
-      call MPI_Cart_shift (cart_comm, 1, 1, nbr_down, nbr_up, ierr)
+      ! ---------------------------------------------------------
+      ! ADAPT DIMENSIONS BASED ON MODULE FLAG
+      ! ---------------------------------------------------------
+      if (topology_dim_order == 0) then
+          ! Default internal behavior [X, Y]
+          dim_x = 0
+          dim_y = 1
+      else
+          ! External framework behavior [Y, X]
+          dim_x = 1
+          dim_y = 0
+      end if
+
+      ! Neighbor ranks using mapped dimensions
+      call MPI_Cart_shift (cart_comm, dim_x, 1, nbr_left, nbr_right, ierr)
+      call MPI_Cart_shift (cart_comm, dim_y, 1, nbr_down, nbr_up, ierr)
+      ! ---------------------------------------------------------
 
         ! Halo exchange in X direction
       allocate (sendbuf_right(ny * nghost), recvbuf_left(ny * nghost))
@@ -585,6 +625,76 @@
 #endif
 
     end subroutine Min_across_mpi_tasks
+
+    subroutine Print_cart_info (cart_comm)
+
+#ifdef DM_PARALLEL
+      use mpi
+#endif
+
+      implicit none
+      integer, intent(in) :: cart_comm
+
+      integer :: rank, ierr, ndims, topo_type, d
+      integer, allocatable, dimension(:) :: dims, coords
+      logical, allocatable, dimension(:) :: periods
+
+#ifdef DM_PARALLEL
+      ! Get the rank of the calling process
+      call MPI_Comm_rank(cart_comm, rank, ierr)
+
+      ! 1. Verify this is actually a Cartesian communicator
+      call MPI_Topo_test(cart_comm, topo_type, ierr)
+
+      if (topo_type /= MPI_CART) then
+         if (rank == 0) print *, "DEBUG ERROR: The provided communicator is NOT a Cartesian topology."
+         return
+      end if
+
+      ! 2. Get the number of dimensions
+      call MPI_Cartdim_get(cart_comm, ndims, ierr)
+
+      if (ierr == MPI_SUCCESS) then
+         allocate(dims(ndims))
+         allocate(periods(ndims))
+         allocate(coords(ndims))
+
+         ! 3. Extract the full topology information
+         call MPI_Cart_get(cart_comm, ndims, dims, periods, coords, ierr)
+
+         ! 4. Print the overall grid configuration (Restricted to Rank 0 to avoid console spam)
+         if (rank == 0) then
+            print *, "=========================================="
+            print *, "       CARTESIAN TOPOLOGY DEBUG           "
+            print *, "=========================================="
+            print *, "Number of Dimensions: ", ndims
+            do d = 1, ndims
+               print *, "--- Dimension ", d, " ---"
+               print *, "  Grid Size (Ranks):  ", dims(d)
+               print *, "  Is Periodic?:       ", periods(d)
+            end do
+            print *, "------------------------------------------"
+         end if
+
+         ! Wait for Rank 0 to finish printing the header
+         call MPI_Barrier(cart_comm, ierr)
+
+         ! 5. Print individual rank coordinates
+         ! (Restricted to Ranks 0 and 1 for your specific debugging needs)
+         if (rank == 0 .or. rank == 1) then
+             print *, "DEBUG -> Rank ", rank, " is at Coordinates: ", coords
+         end if
+
+         ! Optional: Barrier again to keep standard output clean before the program continues
+         call MPI_Barrier(cart_comm, ierr)
+
+         deallocate(dims, periods, coords)
+      else
+         print *, "DEBUG ERROR [Rank ", rank, "]: Failed to get Cartesian dimensions."
+      end if
+#endif
+
+    end subroutine Print_cart_info
 
     subroutine Sum_across_mpi_tasks (local_sum, cart_comm, global_sum)
 
