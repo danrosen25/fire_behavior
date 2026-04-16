@@ -16,7 +16,7 @@
     use stderrout_mod, only : Stop_simulation, Print_message
     use tiles_mod, only : Calc_tiles_dims
     use wrfdata_mod, only : wrfdata_t, G, RERADIUS
-    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Distribute_var2d
+    use mpi_mod, only : Calc_tasks_in_x_and_y, Calc_patch_dims, Distribute_var2d, Print_cart_info, topology_dim_order
 
     implicit none
 
@@ -493,6 +493,19 @@
 
           call this%Init_tiles_in_wrf (config_flags, sr_x, sr_y)
 
+#ifdef DM_PARALLEL
+!          call Mpi_comm_size (this%cfbm_comm, ntasks, ierr)
+!          if (ierr /= MPI_SUCCESS) call Stop_simulation ('Problems getting the number of MPI tasks in WRF')
+!          this%ntasks = ntasks
+
+          this%cart_comm = this%cfbm_comm
+            ! Chaning the way halo exchange is done
+          topology_dim_order = 1
+
+            ! Debug the topology here
+          if (DEBUG_LOCAL) call Print_cart_info (this%cart_comm)
+#endif
+
         case default
 
           call Stop_simulation ('Not ready to complete fire state initialization 1')
@@ -850,6 +863,10 @@
       write (OUTPUT_UNIT, *) 'ifms = ', this%ifms, 'ifme = ', this%ifme
       write (OUTPUT_UNIT, *) 'jfms = ', this%jfms, 'jfme = ', this%jfme
       write (OUTPUT_UNIT, *) 'kfms = ', this%kfms, 'kfme = ', this%kfme
+
+      write (OUTPUT_UNIT, *) 'ifps = ', this%ifps, 'ifpe = ', this%ifpe
+      write (OUTPUT_UNIT, *) 'jfps = ', this%jfps, 'jfpe = ', this%jfpe
+!      write (OUTPUT_UNIT, *) 'kfps = ', this%kfps, 'kfpe = ', this%kfpe
 
 !      write (OUTPUT_UNIT, *) 'ifts = ', this%ifts, 'ifte = ', this%ifte
 !      write (OUTPUT_UNIT, *) 'jfts = ', this%jfts, 'jfte = ', this%jfte
