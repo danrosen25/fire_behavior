@@ -58,7 +58,7 @@
       integer :: fire_upwinding_reinit = 4    ! "numerical scheme (space) for reinitialization PDE: 1=WENO3, 2=WENO5, 3=hybrid WENO3-ENO1, 4=hybrid WENO5-ENO1"
       integer :: fire_lsm_band_ngp = 4        ! "number of grid points around lfn=0 that WENO5/3 is used (ENO1 elsewhere),
                                               ! for fire_upwinding_reinit=4,5 and fire_upwinding=8,9 options"
-      real :: reinit_pseudot_coef = 0.01      ! Coefficient for the pseudo time
+      real :: reinit_pseudot_coef = 0.0001    ! Coefficient for the pseudo time
 
       integer :: fast_dist_reinit_opt = 0     ! Fast distance reinitialization method (or eikonal solver): 0) None, 1) FSM
       integer :: fast_dist_reinit_freq = 600  ! Number of time steps to perform a reinit with fast distance reinit method
